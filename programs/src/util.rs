@@ -27,6 +27,10 @@ pub const EXIT_NOAPPLET: i32 = 127;
 pub fn read_retry(fd: i32, buf: &mut [u8]) -> Result<usize> {
     loop {
         match sys::read(fd, buf) {
+            Ok(n) if n <= buf.len() => return Ok(n),
+            // A kernel that claims more than the buffer is broken; never slice
+            // past it (that would panic, and this process has no unwinding).
+            Ok(_) => return Err(Errno::EIO),
             Err(Errno::EAGAIN) => {
                 // The only voluntary switch available; ignore a yield failure
                 // and retry the read (a broken yield must not hang output).

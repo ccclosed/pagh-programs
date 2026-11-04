@@ -32,7 +32,7 @@ pub fn run(args: &[alloc::string::String]) -> i32 {
                     'n' => newline = false,
                     'e' => escapes = true,
                     'E' => escapes = false,
-                    _ => unreachable!(),
+                    _ => {}
                 }
             }
             index += 1;
