@@ -16,14 +16,13 @@ with the command above and is listed in `.gitignore`.
 Index `size` semantics
 ----------------------
 
-The contract says the installer "checks the payload against the SHA-256 and
-size in the index". The manifest's `sha256` is the digest of the *payload*
-(the ELF inside the .ppkg), so this tool writes the payload length as the index
-`size` too. The .ppkg file length is `16 + manifest_len + payload_len` and is
-derivable from the header, so an installer that wants to validate the download
-length can compute it before parsing. This is called out in the README and the
-hand-off report because the wording admits the other reading; see
-docs/package-format.md and the Lead's kernel installer.
+The index `size` and `sha256` describe the **whole `.ppkg` file** — the bytes the
+installer actually downloads and hashes while streaming. The manifest's
+`sha256` describes only the ELF payload inside the package. The kernel installer
+checks the download against the index pair before it parses anything, so an
+index that described only the payload would let a malicious header/manifest
+through unchecked; total-file semantics is the contract in
+`docs/package-format.md`.
 
 Only the Python standard library is used.
 """
@@ -174,8 +173,12 @@ def build_package(elf: bytes, version: str, commands: list[str]) -> tuple[bytes,
     meta = {
         "name": NAME,
         "version": version,
-        "sha256": payload_sha,
-        "size": len(elf),
+        # The index describes the download: the whole .ppkg. The manifest still
+        # carries the payload digest, so both are recorded and checked.
+        "sha256": hashlib.sha256(package).hexdigest(),
+        "size": len(package),
+        "payload_sha256": payload_sha,
+        "payload_size": len(elf),
         "kind": KIND,
         "commands": command_list,
         "url": f"pkg/{NAME}-{version}.ppkg",
@@ -236,7 +239,8 @@ def build(out: Path, elf_path: Path, do_build: bool) -> None:
 
     print(f"wrote {out / 'index'}")
     print(f"wrote {package_path} ({len(package)} bytes)")
-    print(f"  payload: {len(elf)} bytes, sha256 {meta['sha256']}")
+    print(f"  payload: {len(elf)} bytes, sha256 {meta['payload_sha256']}")
+    print(f"  package: {len(package)} bytes, sha256 {meta['sha256']}")
     print(f"  commands ({len(commands)}): {', '.join(commands)}")
 
     verify(out)
@@ -354,16 +358,20 @@ def verify(out: Path) -> None:
             raise BuildError(f"{where}: manifest kind {manifest['kind']!r} != {kind!r}")
         if manifest["commands"] != commands:
             raise BuildError(f"{where}: manifest commands differ from the index")
-        if manifest["sha256"] != sha:
-            raise BuildError(f"{where}: manifest sha256 differs from the index")
-        if len(payload) != size:
+        # The index describes the whole .ppkg (what the installer streams and
+        # hashes); the manifest describes only the payload inside it.
+        package_bytes = package_path.read_bytes()
+        if len(package_bytes) != size:
             raise BuildError(
-                f"{where}: index size {size} != payload length {len(payload)} "
-                "(the index size is the payload length by contract; see the docstring)"
+                f"{where}: index size {size} != package length {len(package_bytes)} "
+                "(the index describes the whole .ppkg)"
             )
-        digest = hashlib.sha256(payload).hexdigest()
+        digest = hashlib.sha256(package_bytes).hexdigest()
         if digest != sha:
-            raise BuildError(f"{where}: payload sha256 {digest} != index {sha}")
+            raise BuildError(f"{where}: package sha256 {digest} != index {sha}")
+        payload_digest = hashlib.sha256(payload).hexdigest()
+        if manifest["sha256"] != payload_digest:
+            raise BuildError(f"{where}: manifest sha256 != payload digest")
         if len(manifest["commands"].split(",")) == 0:
             raise BuildError(f"{where}: commands parse to nothing")
         packages += 1

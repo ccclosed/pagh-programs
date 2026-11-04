@@ -41,10 +41,12 @@ PPKGINDEX 1
 name<TAB>version<TAB>sha256<TAB>size<TAB>kind<TAB>commands<TAB>url
 ```
 
-`url` is relative to the repository root (`pkg/hello-1.0.0.ppkg`). The installer
-fetches `<repo>/index`, then `<repo>/<url>`, checks the payload against the
-SHA-256 and size in the index **before** writing it to the filesystem, and only
-then installs. An unsigned repository is a valid test mirror; a mirror whose index
+`url` is relative to the repository root (`pkg/hello-1.0.0.ppkg`). The `sha256`
+and `size` fields describe the **whole `.ppkg` file** — the bytes the installer
+streams and hashes while downloading. (The manifest's own `sha256` describes only
+the ELF payload and is checked after the download gate.) The installer fetches
+`<repo>/index`, then `<repo>/<url>`, verifies size and SHA-256 of the downloaded
+bytes **before** parsing `PPKG0001`, and only then installs. An unsigned repository is a valid test mirror; a mirror whose index
 or package fails the digest is refused and nothing is installed.
 
 ## Installer (`pkg` in the kernel shell)
