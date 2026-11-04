@@ -1,0 +1,5 @@
+# Same pinned nightly as `pagh-api` and `pagh-riscv`; the riscv64 bare-metal
+# core is precompiled in this toolchain, so no build-std and no network.
+[toolchain]
+channel = "nightly-2026-07-12"
+targets = ["riscv64gc-unknown-none-elf"]

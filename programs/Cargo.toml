@@ -1,0 +1,16 @@
+[package]
+name = "paghbox"
+version = "1.0.0"
+edition = "2021"
+publish = false
+description = "busybox-style applet bundle for pagh-riscv"
+
+[[bin]]
+name = "paghbox"
+path = "src/main.rs"
+
+# Sibling checkout. `../../pagh-api` is correct from `programs/`; if the API is
+# elsewhere, change this single line (Cargo has no fallback for path deps) —
+# see README.md.
+[dependencies]
+libpagh = { path = "../../pagh-api/libpagh" }

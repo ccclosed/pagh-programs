@@ -1,0 +1,12 @@
+[workspace]
+members = ["programs"]
+resolver = "2"
+
+# One static ELF, no unwinder, no relocations.
+[profile.release]
+panic = "abort"
+opt-level = 2
+debug = false
+lto = false
+codegen-units = 1
+overflow-checks = true
