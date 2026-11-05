@@ -5,14 +5,14 @@
 `[ ]` запланировано. Ядро — POSIX-подобные CLI-утилиты; «портировать» =
 реализовать семантику под `libpagh` (не тащить GNU/Linux-исходники).
 
-> Статус: 82 из 120 отмечены `[x]` — они собираются в `paghbox` 1.4.0.
-> Батч 5 (15 утилит: whoami, id, env, tee, split, csplit, join, fmt, od, xxd,
-> uuencode, uudecode, curl, wget, kill) проверен живым запуском в QEMU на ядре
-> 0.16.1: 72 PASS на 21 загрузке, включая `curl`/`wget` к HTTP-серверу на
-> `10.0.2.2` и `kill -0`. У stdin по-прежнему нет EOF и нет пайпов, поэтому
-> `tee` получил `-i FILE`, а `uuencode`/`uudecode` проверены через файлы.
-> Остальные `[ ]` запланированы. Список — ровно 120 уникальных имён, все 82
-> реализованных входят в `commands=` пакета.
+> Статус: 94 из 120 отмечены `[x]` — они собираются в `paghbox` 1.5.0.
+> Батч 6 (12 утилит: md5sum, sha1sum, sha256sum, sha512sum, b2sum, basenc,
+> gzip, gunzip, tar, untar, patch, cal) проверен живым запуском в QEMU на
+> ядре 0.16.1: 76 PASS на 33 загрузках, включая известные хэш-векторы,
+> round-trip gzip/tar, применение unified diff и календарь. `gzip` пишет
+> DEFLATE stored blocks (без сжатия), `tar` — ustar; ограничения записаны в
+> README. Остальные `[ ]` запланированы. Список — ровно 120 уникальных имён,
+> все 94 реализованных входят в `commands=` пакета.
 
 ## Текстовый вывод и идентичность (1–20)
 
@@ -84,19 +84,20 @@
 - [x] hexdump — hex-дамп
 - [x] sum — BSD/SysV контрольная сумма (`-s` — SysV)
 - [x] cksum — POSIX CRC-32 и размер
-- [ ] md5sum — MD5
-- [ ] sha1sum — SHA-1
-- [ ] sha256sum — SHA-256
-- [ ] b2sum — BLAKE2
+- [x] md5sum — MD5 файлов/stdin, `-c` (проверка по `md5sum`-файлу)
+- [x] sha1sum — SHA-1, тот же интерфейс и `-c`
+- [x] sha256sum — SHA-256, тот же интерфейс и `-c`
+- [x] sha512sum — SHA-512, тот же интерфейс и `-c`
+- [x] b2sum — BLAKE2b-512 (unkeyed), тот же интерфейс и `-c`
 - [x] base32 — base32 encode/decode (`-d`, `-w N`)
 - [x] base64 — base64 encode/decode (`-d`, `-w N`)
-- [ ] basenc — base-кодировки
+- [x] basenc — base16/base32/base32hex/base64/base64url, `-d`, `-w N`
 - [x] uudecode — декодировать classic uuencode (`-o FILE`)
 - [x] uuencode — classic uuencode (mode 644, имена, группы по 45)
 - [x] strings — печатные строки из файла
 - [x] diff — normal-формат (`NcN`, `<`/`>`)
 - [x] cmp — побайтовое сравнение (`-s`, `-l`)
-- [ ] patch — применить патч
+- [x] patch — unified diff (`---/+++/@@`), `-p N`, `-o`, `.orig`-бэкап
 
 ## Система и процессы (76–100)
 
@@ -137,20 +138,20 @@
 - [x] wget — HTTP/1.0 GET в файл (`-O`)
 - [ ] ping — ICMP (через будущий syscall)
 - [ ] netstat — сетевые сокеты (пока нет)
-- [ ] dns — DNS-резолв (нет syscall)
 - [x] numfmt — SI/IEC (`--to`, `--from`, `--to-unit`, `--suffix`, `--padding`)
-- [ ] gzip — сжатие (свой Huffman)
-- [ ] gunzip — распаковка
-- [ ] tar — архив (свой формат)
-- [ ] untar — распаковка tar
+- [x] gzip — gzip-поток с DEFLATE stored blocks (без сжатия), `-d/-c/-k/-f`
+- [x] gunzip — `gzip -d`, отдельное имя
+- [x] tar — ustar: create/list/extract, `-f`, `-C`, `-v`, файлы/каталоги/симлинки
+- [x] untar — `tar -x`
 - [ ] lsblk — блочные устройства (нет syscall)
-- [ ] cal — календарь
+- [x] cal — месяц/год по григорианскому календарю, `-y`; время — epoch
 - [ ] addr2line — адрес → файл:строка
 - [x] arch — архитектура из uname
 - [x] tree — дерево каталога
 
-> Примечание: список — рабочий каталог, а не обещание одной итерации. 82
+> Примечание: список — рабочий каталог, а не обещание одной итерации. 94
 > отмеченных `[x]` реализованы в `programs/src/applets/` и собираются в
-> `paghbox` 1.4.0. Живая проверка ведётся по ядру 0.16.1
+> `paghbox` 1.5.0. Живая проверка ведётся по ядру 0.16.1
 > (`run /mnt/paghbox <applet> ...`), см. README и
-> `docs/live-testing.md`.
+> `docs/live-testing.md`. Слот `dns` (DNS-резолв, для которого в ABI нет
+> syscall) отдан `sha512sum`, чтобы список остался ровно из 120 имён.

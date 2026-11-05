@@ -1,0 +1,45 @@
+# paghbox 1.5.0: pkg install and symlink live check
+
+Host: `python3 -m http.server 8766 --bind 127.0.0.1 --directory repo`
+(ephemeral port from the run). Guest: QEMU `virt`, kernel 0.16.1 debug, 64 MiB
+ext2, `--net`; the guest reaches the host as `10.0.2.2:8766`.
+The package was built by `python3 tools/build_repo.py`: 743680-byte payload,
+744441-byte `.ppkg`, SHA-256
+`0a7f5c0230a09810553970771bf3fe12940b3fd12ac4e0b12f6dd3476a3595c4`.
+
+Boot 1 installs from the freshly built `repo/`; boot 2 reuses the same disk
+without a NIC and runs two installer-created symlinks, one of them a new batch-6
+applet (`md5sum`) and one `cal`.
+
+```text
+==== install ====
+Type 'help' for the command list.
+
+pagh:rv64> pkg repo http://10.0.2.2:8766/
+pkg: repo http://10.0.2.2:8766/
+pagh:rv64> pkg index
+pkg: index 1 package(s)
+pagh:rv64> pkg install paghbox
+pkg: installed paghbox 1.5.0
+pagh:rv64>
+==== symlink ====
+Type 'help' for the command list.
+
+pagh:rv64> run /mnt/bin/md5sum /mnt/abc.txt
+900150983cd24fb0d6963f7d28e17f72  /mnt/abc.txt
+run: /mnt/bin/md5sum exited with code 0
+pagh:rv64> run /mnt/bin/cal 2 2024
+   February 2024
+Su Mo Tu We Th Fr Sa
+             1  2  3
+ 4  5  6  7  8  9 10
+11 12 13 14 15 16 17
+18 19 20 21 22 23 24
+25 26 27 28 29
+run: /mnt/bin/cal exited with code 0
+pagh:rv64>
+```
+
+`debugfs -R 'ls -l /bin' disk.img` shows the installed `paghbox` inode and
+**94 symlinks** (one per `commands=` entry), including `md5sum`, `cal`, `gzip`,
+`tar` and `patch`.

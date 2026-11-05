@@ -8,10 +8,13 @@ use alloc::string::String;
 
 pub mod arch;
 pub mod awk;
+pub mod b2sum;
 pub mod base32;
 pub mod base64;
+pub mod basenc;
 pub mod basename;
 mod bre;
+pub mod cal;
 pub mod cat;
 pub mod chmod;
 pub mod csplit;
@@ -24,6 +27,7 @@ pub mod cp;
 pub mod cut;
 pub mod date;
 pub mod diff;
+mod digest;
 pub mod dirname;
 pub mod du;
 pub mod echo;
@@ -36,14 +40,18 @@ pub mod file;
 pub mod find;
 pub mod fmt;
 pub mod fold;
+pub mod gzip;
 pub mod grep;
+pub mod gunzip;
 pub mod head;
 pub mod hexdump;
+mod hashsum;
 pub mod hostname;
 mod httpc;
 pub mod id;
 pub mod ln;
 pub mod ls;
+pub mod md5sum;
 pub mod mkdir;
 pub mod join;
 pub mod kill;
@@ -54,6 +62,7 @@ pub mod nproc;
 pub mod numfmt;
 pub mod od;
 pub mod paste;
+pub mod patch;
 pub mod printf;
 pub mod pwd;
 pub mod readlink;
@@ -63,6 +72,9 @@ pub mod rmdir;
 pub mod rm;
 pub mod sed;
 pub mod seq;
+pub mod sha1sum;
+pub mod sha256sum;
+pub mod sha512sum;
 pub mod shuf;
 pub mod sleep;
 pub mod split;
@@ -72,6 +84,7 @@ pub mod strings;
 pub mod sum;
 pub mod tac;
 pub mod tail;
+pub mod tar;
 pub mod tee;
 pub mod test;
 pub mod touch;
@@ -81,6 +94,7 @@ pub mod true_applet;
 pub mod truncate;
 pub mod uname;
 pub mod unexpand;
+pub mod untar;
 pub mod uniq;
 pub mod uptime;
 mod uu;
@@ -117,6 +131,7 @@ pub const NAMES: &[&str] = &[
     "sleep",
     "uptime",
     "date",
+    "cal",
     "readlink",
     "realpath",
     "uniq",
@@ -155,10 +170,17 @@ pub const NAMES: &[&str] = &[
     "tac",
     "sum",
     "cksum",
+    "md5sum",
+    "sha1sum",
+    "sha256sum",
+    "sha512sum",
+    "b2sum",
     "base64",
     "base32",
+    "basenc",
     "diff",
     "cmp",
+    "patch",
     "sed",
     "awk",
     "shuf",
@@ -178,6 +200,10 @@ pub const NAMES: &[&str] = &[
     "curl",
     "wget",
     "kill",
+    "gzip",
+    "gunzip",
+    "tar",
+    "untar",
 ];
 
 /// Run an applet by name; `None` means "no such applet".
@@ -223,6 +249,7 @@ pub fn dispatch(name: &str, args: &[String]) -> Option<i32> {
         "sleep" => sleep::run(args),
         "uptime" => uptime::run(args),
         "date" => date::run(args),
+        "cal" => cal::run(args),
         "readlink" => readlink::run(args),
         "realpath" => realpath::run(args),
         "uniq" => uniq::run(args),
@@ -243,10 +270,17 @@ pub fn dispatch(name: &str, args: &[String]) -> Option<i32> {
         "tac" => tac::run(args),
         "sum" => sum::run(args),
         "cksum" => cksum::run(args),
+        "md5sum" => md5sum::run(args),
+        "sha1sum" => sha1sum::run(args),
+        "sha256sum" => sha256sum::run(args),
+        "sha512sum" => sha512sum::run(args),
+        "b2sum" => b2sum::run(args),
         "base64" => base64::run(args),
         "base32" => base32::run(args),
+        "basenc" => basenc::run(args),
         "diff" => diff::run(args),
         "cmp" => cmp::run(args),
+        "patch" => patch::run(args),
         "sed" => sed::run(args),
         "awk" => awk::run(args),
         "shuf" => shuf::run(args),
@@ -266,6 +300,10 @@ pub fn dispatch(name: &str, args: &[String]) -> Option<i32> {
         "curl" => curl::run(args),
         "wget" => wget::run(args),
         "kill" => kill::run(args),
+        "gzip" => gzip::run(args),
+        "gunzip" => gunzip::run(args),
+        "tar" => tar::run(args),
+        "untar" => untar::run(args),
         _ => return None,
     })
 }

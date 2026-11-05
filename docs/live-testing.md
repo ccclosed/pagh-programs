@@ -1,5 +1,132 @@
 # Живые прогоны paghbox
 
+## 1.5.0 (батч 6)
+
+Дата: 2026-11-06. Ядро: `/home/oleg/pagh-riscv/target/riscv64gc-unknown-none-elf/debug/pagh`
+(main 0.16.1; `run /mnt/paghbox uname -a` в QEMU печатает
+`pagh pagh-riscv 0.10.0 0.16.1 riscv64`). QEMU `qemu-system-riscv64` 10.2.2,
+машина `virt`, 256 MiB, serial на Unix-сокете, `-bios default`, modern virtio
+(`-global virtio-mmio.force-legacy=false`). Диск: 64 MiB ext2, создан на хосте
+`mke2fs -q -t ext2 -F -b 4096 -d rootfs disk.img 64M`; в корне — `paghbox`
+1.5.0 и фикстуры.
+
+Драйвер — [`tools/live_test_150.py`](../tools/live_test_150.py): **34 загрузки
+по 2–3 команды**, после каждой проверялись вывод и
+`run: /mnt/paghbox exited with code N`. Итог: **78 PASS, 0 FAIL**; все 12
+новых applet'ов проверены функционально. Команды с длинным выводом стоят
+последними в загрузке: serial-драйвер теряет ввод, если гость занят печатью
+длинной строки, пока хост ещё отправляет следующие команды.
+
+Сырой транскрипт: [`live-1.5.0-transcript.txt`](live-1.5.0-transcript.txt).
+Отдельно: [`live-1.5.0-pkg-install.txt`](live-1.5.0-pkg-install.txt)
+(`pkg install paghbox`, 94 симлинка).
+
+### Итог 1.5.0
+
+* `md5sum`, `sha1sum`, `sha256sum`, `sha512sum`, `b2sum` — известные векторы
+  для `""`, `"abc"` и `"The quick brown fox jumps over the lazy dog"`; `-b`,
+  `-c` (`OK`/`FAILED`), `--status`; одиночный файл/stdin и несколько файлов.
+* `basenc` — base64, base64url, base32, base32hex, base16; encode/decode,
+  `-w 4`, unpadded decode и отказ на неверных хвостовых битах; `-i` и ошибки
+  (exit 1/2).
+* `gzip`/`gunzip` — запись gzip-потока с DEFLATE stored blocks, `-k`, `-f`,
+  `-c`, `-d`; round-trip в госте; host-поток `gzip.compress(level=0)` прочитан
+  гостем, а guest-поток распакован Python `gzip.decompress` через `debugfs`.
+* `tar`/`untar` — ustar create/list/extract `tree/` (файлы, каталоги,
+  симлинк), `-C`, `-f`, `-v`; host-архив с prefix-именем >100 символов
+  прочитан, guest-архив разобран Python `tarfile`.
+* `patch` — in-place с `.orig`, два hunks, `-p1`, `-o`, новый файл из
+  `/dev/null`, `\ No newline at end of file` (проверено `xxd`), неверный
+  контекст и неверные counts → exit 1.
+* `cal` — февраль 2024, январь 1970, сентябрь 1752, `-y 2024`, текущий месяц
+  (epoch → январь 1970) и `cal 2024`; сетка 7 колонок сверена с Python
+  `calendar`; неверные месяц/год/опция → exit 2.
+* `pkg install` (опционально) — `paghbox 1.5.0`, 94 симлинка; проверены
+  `/mnt/bin/md5sum` и `/mnt/bin/cal`.
+
+### PASS-строки 1.5.0
+
+```text
+PASS md5sum: run /mnt/paghbox md5sum /mnt/empty.txt /mnt/abc.txt /mnt/fox.txt
+PASS sha1sum: run /mnt/paghbox sha1sum /mnt/empty.txt /mnt/abc.txt /mnt/fox.txt
+PASS sha256sum: run /mnt/paghbox sha256sum /mnt/empty.txt /mnt/abc.txt /mnt/fox.txt
+PASS sha512sum: run /mnt/paghbox sha512sum /mnt/empty.txt /mnt/abc.txt /mnt/fox.txt
+PASS b2sum: run /mnt/paghbox b2sum /mnt/empty.txt /mnt/abc.txt /mnt/fox.txt
+PASS md5sum -b: run /mnt/paghbox md5sum -b /mnt/abc.txt
+PASS md5sum check: run /mnt/paghbox md5sum -c /mnt/sums.md5
+PASS sha256 check: run /mnt/paghbox sha256sum -c /mnt/sums.sha256
+PASS md5sum bad check: run /mnt/paghbox md5sum -c /mnt/sums.bad
+PASS md5sum --status: run /mnt/paghbox md5sum -c --status /mnt/sums.md5
+PASS md5sum unknown option: run /mnt/paghbox md5sum -z
+PASS basenc base64 encode: run /mnt/paghbox basenc --base64 /mnt/plain.txt
+PASS basenc base64 decode: run /mnt/paghbox basenc --base64 -d /mnt/b64.txt
+PASS basenc base64url decode: run /mnt/paghbox basenc --base64url -d /mnt/weird64url.txt
+PASS basenc base32 encode: run /mnt/paghbox basenc --base32 /mnt/plain.txt
+PASS basenc base32 decode: run /mnt/paghbox basenc --base32 -d /mnt/b32.txt
+PASS basenc base32hex decode: run /mnt/paghbox basenc --base32hex -d /mnt/b32hex.txt
+PASS basenc base16 encode: run /mnt/paghbox basenc --base16 /mnt/plain.txt
+PASS basenc base16 decode: run /mnt/paghbox basenc --base16 -d /mnt/b16.txt
+PASS basenc -w 4: run /mnt/paghbox basenc --base64 -w 4 /mnt/plain.txt
+PASS basenc missing type: run /mnt/paghbox basenc /mnt/plain.txt
+PASS basenc invalid data: run /mnt/paghbox basenc --base64 -d /mnt/bad64.txt
+PASS basenc bad option: run /mnt/paghbox basenc -z
+PASS gzip keep: run /mnt/paghbox gzip -k /mnt/gzip_src.txt
+PASS gunzip force: run /mnt/paghbox gunzip -f /mnt/gzip_src.txt.gz
+PASS gzip content: run /mnt/paghbox cat /mnt/gzip_src.txt
+PASS gzip -dc host stream: run /mnt/paghbox gzip -d -c /mnt/ext.gz
+PASS gunzip -c host stream: run /mnt/paghbox gunzip -c /mnt/ext.gz
+PASS gzip first: run /mnt/paghbox gzip -k /mnt/plain.txt
+PASS gzip exists: run /mnt/paghbox gzip --keep /mnt/plain.txt
+PASS gzip force: run /mnt/paghbox gzip -fk /mnt/plain.txt
+PASS gzip unknown suffix: run /mnt/paghbox gzip -d /mnt/plain.txt
+PASS gzip bad option: run /mnt/paghbox gzip -z
+PASS gunzip bad option: run /mnt/paghbox gunzip -z
+PASS tar create: run /mnt/paghbox tar -cf /mnt/tree.tar -C /mnt tree
+PASS tar list: run /mnt/paghbox tar -tf /mnt/tree.tar
+PASS tar create again: run /mnt/paghbox tar -cf /mnt/tree.tar -C /mnt tree
+PASS tar extract: run /mnt/paghbox tar -xf /mnt/tree.tar -C /mnt/out
+PASS tar cat: run /mnt/paghbox cat /mnt/out/tree/a.txt
+PASS tar list host: run /mnt/paghbox tar -tf /mnt/ext.tar
+PASS tar extract host: run /mnt/paghbox tar -xf /mnt/ext.tar -C /mnt/out2
+PASS tar readlink host: run /mnt/paghbox readlink /mnt/out2/extdir/link
+PASS untar extract: run /mnt/paghbox untar -f /mnt/ext.tar -C /mnt/out2
+PASS untar cat: run /mnt/paghbox cat /mnt/out2/extdir/one.txt
+PASS tar list long: run /mnt/paghbox tar -tf /mnt/long.tar
+PASS tar no mode: run /mnt/paghbox tar -f /mnt/ext.tar
+PASS tar bad option: run /mnt/paghbox tar -z
+PASS untar conflict: run /mnt/paghbox untar -c -f /mnt/ext.tar
+PASS patch apply: run /mnt/paghbox patch -i /mnt/fix.patch
+PASS patch result: run /mnt/paghbox cat /mnt/patch_me.txt
+PASS patch backup: run /mnt/paghbox cat /mnt/patch_me.txt.orig
+PASS patch multi: run /mnt/paghbox patch -i /mnt/multi.patch
+PASS patch multi result: run /mnt/paghbox cat /mnt/multi.txt
+PASS patch p1: run /mnt/paghbox patch -p1 -i /mnt/p1.patch
+PASS patch p1 result: run /mnt/paghbox cat /mnt/multi2.txt
+PASS patch output: run /mnt/paghbox patch -o /mnt/patched.out -i /mnt/fix2.patch
+PASS patch original intact: run /mnt/paghbox cat /mnt/fix2_target.txt
+PASS patch output content: run /mnt/paghbox cat /mnt/patched.out
+PASS patch no newline: run /mnt/paghbox patch -i /mnt/nonl.patch
+PASS patch no newline xxd: run /mnt/paghbox xxd /mnt/nonl.txt
+PASS patch create file: run /mnt/paghbox patch -p1 -i /mnt/newfile.patch
+PASS patch created content: run /mnt/paghbox cat /mnt/created.txt
+PASS patch context fail: run /mnt/paghbox patch -i /mnt/bad.patch
+PASS patch count fail: run /mnt/paghbox patch -i /mnt/badcount.patch
+PASS patch missing arg: run /mnt/paghbox patch -p
+PASS cal feb 2024: run /mnt/paghbox cal 2 2024
+PASS cal jan 1970: run /mnt/paghbox cal 1 1970
+PASS cal sep 1752: run /mnt/paghbox cal 9 1752
+PASS cal -y 2024: run /mnt/paghbox cal -y 2024
+PASS cal current: run /mnt/paghbox cal
+PASS cal 2024 grid: run /mnt/paghbox cal 2024
+PASS cal month 13: run /mnt/paghbox cal 13 2024
+PASS cal year 0: run /mnt/paghbox cal 2 0
+PASS cal bad option: run /mnt/paghbox cal -z
+PASS host gzip create: run /mnt/paghbox gzip -k /mnt/plain.txt
+PASS host tar create: run /mnt/paghbox tar -cf /mnt/tree.tar -C /mnt tree longdddddddddddddddddddddddddddddddddddddddddddddddddd
+PASS host gzip: gzip.decompress(guest /plain.txt.gz)
+PASS host tar: tarfile read guest /tree.tar
+```
+
 ## 1.4.0 (батч 5)
 
 Дата: 2026-11-05. Ядро: `/home/oleg/pagh-riscv/target/riscv64gc-unknown-none-elf/debug/pagh`

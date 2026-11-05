@@ -2,7 +2,7 @@
 
 Репозиторий портов: программы написаны **под нативный API `libpagh`**
 (соседний checkout `../pagh-api`), а не под Linux-совместимый слой. Один
-busybox-style ELF `paghbox` содержит 82 applet'а; `tools/build_repo.py`
+busybox-style ELF `paghbox` содержит 94 applet'а; `tools/build_repo.py`
 упаковывает его в `.ppkg` и пишет `repo/index`. Установщик `pkg` в ядре
 pagh-riscv — потребитель этого репозитория: скачивает пакет по HTTP, сверяет
 SHA-256/размер, ставит ELF в `/mnt/bin` и создаёт симлинки на команды.
@@ -10,21 +10,23 @@ SHA-256/размер, ставит ELF в `/mnt/bin` и создаёт симл�
 ## Структура
 
 ```
-catalog.md                 целевые 120 программ и честный статус (82 [x])
+catalog.md                 целевые 120 программ и честный статус (94 [x])
 docs/package-format.md     формат .ppkg и index (контракт с ядром)
 programs/                  crate paghbox: dispatch + applets/
   src/main.rs              argv[0]/`paghbox <applet>` + exit codes
   src/util.rs              EAGAIN-retry чтение, Input, вывод
-  src/applets/             82 модуля: echo true false yes pwd basename dirname seq
+  src/applets/             94 модуля: echo true false yes pwd basename dirname seq
                            cat wc head tail ls stat uname hostname arch nproc sleep
                            uptime date readlink realpath uniq sort nl fold expand
                            unexpand rev cut tr comm paste strings hexdump grep
                            rmdir tac sum cksum base64 base32 diff cmp sed awk
                            shuf numfmt whoami id env tee split csplit join fmt
                            od xxd uuencode uudecode curl wget kill
-                           (+ bre/codec/httpc/uu helpers)
+                           md5sum sha1sum sha256sum sha512sum b2sum basenc
+                           gzip gunzip tar untar patch cal
+                           (+ bre/codec/digest/hashsum/httpc/uu helpers)
 tools/build_repo.py        cargo build -> .ppkg -> index, и --check
-tools/live_test_140.py     QEMU live suite 1.4.0 (21 загрузка, 72 проверки)
+tools/live_test_150.py     QEMU live suite 1.5.0 (34 загрузки, 78 проверок)
 repo/                      сгенерировано, в git не входит (см. ниже)
 ```
 
@@ -44,7 +46,7 @@ python3 tools/build_repo.py --check
 ```
 
 `build_repo.py` без аргументов сам вызывает cargo, затем пишет
-`repo/pkg/paghbox-1.4.0.ppkg` и `repo/index`. `--elf PATH` упаковывает готовый
+`repo/pkg/paghbox-1.5.0.ppkg` и `repo/index`. `--elf PATH` упаковывает готовый
 ELF, `--no-build` берёт стандартный путь без cargo, `--check` только
 перечитывает index/пакеты и проверяет magic, длины, манифест, SHA-256, размер
 payload'а и отсутствие «осиротевших» `.ppkg`.
@@ -98,7 +100,7 @@ payload по SHA-256/размеру **до** записи и создаёт си
 `16 + manifest_len + payload_len`. `--check` проверяет именно такую трактовку;
 это же зафиксировано в [`docs/package-format.md`](docs/package-format.md).
 
-## Applet'ы (82)
+## Applet'ы (94)
 
 | Команда | Что делает | Коды выхода |
 |---|---|---|
@@ -123,6 +125,7 @@ payload по SHA-256/размеру **до** записи и создаёт си
 | `sleep` | секунды, включая `0.5`/`1.5`; `nanosleep`, округление вверх до тика | 0; 1; 2 |
 | `uptime` | `up <sec>s` из `clock_gettime(1)` | 0; 1; 2 |
 | `date` | `epoch=<sec>.<nsec>` из `clock_gettime(0)`; часового пояса нет | 0; 1; 2 |
+| `cal` | месяц/год, `-y`; григорианская сетка 7 колонок; «сейчас» — epoch | 0; 1 (clock); 2 |
 | `readlink` | цель симлинка как есть; не-симлинк — ошибка | 0; 1; 2 |
 | `realpath` | лексическая нормализация через `path::resolve`; симлинки не разворачиваются, путь может не существовать | 0; 2 |
 | `uniq` | `-c` (count), `-d`, `-u`; только подряд идущие дубликаты | 0; 1; 2 |
@@ -161,10 +164,17 @@ payload по SHA-256/размеру **до** записи и создаёт си
 | `tac` | обратный порядок строк файла/stdin; последняя строка без `\n` дополняется | 0; 1; 2 |
 | `sum` | BSD 16-бит rotate (по умолчанию) и SysV (`-s`); `checksum blocks [name]` | 0; 1; 2 |
 | `cksum` | POSIX CRC-32 + размер: `crc size [name]` | 0; 1; 2 |
+| `md5sum` | MD5 файлов/stdin, `-b`, `-c` по `md5sum`-файлу; `hex  name` | 0; 1 (несовпадение/файл); 2 |
+| `sha1sum` | SHA-1, тот же интерфейс и `-c` | 0; 1; 2 |
+| `sha256sum` | SHA-256, тот же интерфейс и `-c` | 0; 1; 2 |
+| `sha512sum` | SHA-512, тот же интерфейс и `-c` | 0; 1; 2 |
+| `b2sum` | BLAKE2b-512 (unkeyed), тот же интерфейс и `-c` | 0; 1; 2 |
 | `base64` | encode/decode (`-d`), `-w N` (76; 0 — без переноса) | 0; 1 (ввод); 2 |
 | `base32` | RFC 4648 base32, те же `-d`/`-w N` | 0; 1 (ввод); 2 |
+| `basenc` | base16/base32/base32hex/base64/base64url; `-d`, `-w N`, `-i` | 0; 1 (ввод); 2 |
 | `diff` | normal-формат `NaM`/`NdM`/`NcM`, `<`/`>`/`---`; LCS (Hirschberg) | 0 одинаковы; 1 различия; 2 ошибка |
 | `cmp` | первый байт: `byte N, line L, offset 0xH`; `-s`, `-l` (octal); EOF-диагностика | 0; 1; 2 |
+| `patch` | unified diff `---/+++/@@`, `-p N`, `-o OUT`/`.orig`; контекст без fuzz | 0; 1 (hunk/формат); 2 |
 | `sed` | `s/RE/REP/[g]`, `p`, `d`, адреса `N`/`N,M`, `-n`; BRE-lite, без `-i` | 0; 1; 2 (скрипт) |
 | `awk` | `-F`, `$0/$N`, `NR`, `NF`, `/re/`, сравнения, `{print ...}`; без массивов/BEGIN | 0; 1; 2 (программа) |
 | `shuf` | строки/stdin, `-n N`, `-e ARGS...`, `-i LO-HI`; фиксированный xorshift seed | 0; 1; 2 |
@@ -184,6 +194,10 @@ payload по SHA-256/размеру **до** записи и создаёт си
 | `curl` | HTTP/1.0 GET по IPv4, `-i`, `-o FILE`; `Connection: close` | 0; 1 (сеть/HTTP); 2 |
 | `wget` | тот же GET, файл по basename или `-O FILE`; summary в stderr | 0; 1; 2 |
 | `kill` | TERM/KILL/INT/USR1/USR2/STOP/CONT/0 и номера, несколько pid | 0; 1 (в т.ч. ESRCH); 2 |
+| `gzip` | gzip-поток: заголовок/CRC32/ISIZE, DEFLATE **stored blocks** (без сжатия); `-d/-c/-k/-f` | 0; 1; 2 |
+| `gunzip` | `gzip -d`, отдельное имя | 0; 1; 2 |
+| `tar` | ustar: `-c/-x/-t`, `-f`, `-C`, `-v`; файлы/каталоги/симлинки | 0; 1; 2 |
+| `untar` | `tar -x` | 0; 1; 2 |
 
 
 `cat/wc/head/tail` и новые файловые фильтры читают через `libpagh`: `read` на
@@ -212,50 +226,48 @@ QEMU; живым запуском проверен его разбор аргу�
 
 Сборка: `cargo build --release --target riscv64gc-unknown-none-elf` даёт
 статический RV64 ELF; `python3 tools/build_repo.py` пишет
-`repo/pkg/paghbox-1.4.0.ppkg`, а `python3 tools/build_repo.py --check` зелёный.
-Пакет `paghbox 1.4.0` содержит 82 команды; его размер и SHA-256 приведены в
+`repo/pkg/paghbox-1.5.0.ppkg`, а `python3 tools/build_repo.py --check` зелёный.
+Пакет `paghbox 1.5.0` содержит 94 команды; его размер и SHA-256 приведены в
 разделе [`repo/`](#repo-и-воспроизводимость) ниже. `MAX_COMMANDS = 160` в
-установщике 0.16.1 с запасом покрывает 82.
+установщике 0.16.1 с запасом покрывает 94.
 
 Живой прогон сделан на **ядре 0.16.1** (`/home/oleg/pagh-riscv/target/.../debug/pagh`,
 native ABI + pkg installer), QEMU `virt`, 256 MiB, диск 64 MiB ext2
 (`mke2fs -q -t ext2 -F -b 4096 -d rootfs disk.img 64M`). Драйвер —
-[`tools/live_test_140.py`](tools/live_test_140.py): он собирает образ, копирует
-`paghbox` и фикстуры и делает **21 загрузку по 2–4 команды** (короткие группы
+[`tools/live_test_150.py`](tools/live_test_150.py): он собирает образ, копирует
+`paghbox` и фикстуры и делает **34 загрузки по 2–3 команды** (короткие группы
 обязательны: serial-драйвер теряет длинные строки), проверяя вывод и
-`run: ... exited with code N` после каждой. Результат: **72 PASS, 0 FAIL**, все
-15 новых applet'ов проверены функционально. Сеть проверена на реальном
-HTTP-сервере (`python3 -m http.server`) на хосте: гость обращается к нему как
-`10.0.2.2:<port>` с `--net`.
+`run: ... exited with code N` после каждой. Результат: **78 PASS, 0 FAIL**, все
+12 новых applet'ов проверены функционально. Совместимость контейнеров
+проверена в обе стороны: гость читает host-архивы `.gz`/ustar, а созданные в
+госте `plain.txt.gz` и `tree.tar` после загрузки выгружены через `debugfs` и
+разобраны Python-модулями `gzip`/`tarfile`.
 
-Сырые транскрипты: [`docs/live-1.4.0-transcript.txt`](docs/live-1.4.0-transcript.txt)
-(21 загрузка), [`docs/live-1.4.0-pkg-install.txt`](docs/live-1.4.0-pkg-install.txt)
-(`pkg install` и симлинки), PASS-строки и таблица:
-[`docs/live-testing.md`](docs/live-testing.md).
+Сырые транскрипты:
+[`docs/live-1.5.0-transcript.txt`](docs/live-1.5.0-transcript.txt) (34 загрузки),
+[`docs/live-1.5.0-pkg-install.txt`](docs/live-1.5.0-pkg-install.txt)
+(`pkg install` и симлинки); история батча 5:
+[`docs/live-1.4.0-transcript.txt`](docs/live-1.4.0-transcript.txt),
+[`docs/live-1.4.0-pkg-install.txt`](docs/live-1.4.0-pkg-install.txt).
+PASS-строки и таблица: [`docs/live-testing.md`](docs/live-testing.md).
 
 | Проверка | Результат |
 |---|---|
-| `run /mnt/paghbox uname -a` | `pagh pagh-riscv 0.10.0 0.16.1 riscv64` (release/version-константы ядра; Cargo-версия main — 0.16.1) |
-| `whoami`, `id`, `id -u/-g/-G` | `root`; `uid=0 gid=0(root) groups=0(root)`; `0`/`0`/`0`; `id -u -g` → `0 0` |
-| `env` | `PWD=/mnt`; `env extra`/`env -i` → exit 2 |
-| `tee` | `tee -i in out1 out2` пишет в оба файла и stdout; `tee -a` дописывает (`prefix` + строка) |
-| `split` | `-l 2` → `spaa` (one/two), `spab` (three/four), `spac` (five); `-b 4 -d` → `b00..b02` |
-| `csplit` | `/SECTION/` → `cs00`/`cs01`; `3` печатает `11`/`20`; `-n 3` → `cn000`/`cn001` |
-| `join` | default → `a 1 A`, `d 4 D`; `-1 2 -2 1 -t :` → `1:x:p`, `4:d:r` |
-| `fmt` | `-w 20` reflow; `-s -w 20` сохраняет короткие строки; `-w 0` → exit 2 |
-| `od` | `-A x -t x1` → `000000 68 65 6c 6c 6f 0a` + `000006`; `d`/`c`/`o` формы |
-| `xxd` | `00000000: 6865 6c6c 6f0a ... hello.`; `-l 4 -s 1`; `-r` → `hello` |
-| `uuencode`/`uudecode` | `begin 644 hello.txt ... end`; decode через файл и `-o -` → `hello` |
-| `curl` | body `network ok`; `-i` → `HTTP/1.0 200 OK` + body; `-o /mnt/c.out`; 404 → exit 1 |
-| `wget` | basename `demo.txt`; `-O /mnt/w.out`; summary `wget: saved ... (11 bytes)`; 404/refused → exit 1 |
-| `kill` | `-0 0 0` → exit 0; `999999` → `kill: 999999: No such process`, exit 1; `-BOGUS` → exit 2 |
-| usage/ошибки | 15 новых: неизвестная опция/аргумент → exit 2; bad URL/hostname → exit 2; missing file/HTTP → exit 1 |
+| хэш-векторы | `md5sum`/`sha1sum`/`sha256sum`/`sha512sum`/`b2sum` для `empty`/`abc`/`fox` совпадают с эталонами; `-b` → `hex *name`; `-c` → `OK`, неверная сумма → `FAILED`, `--status` без вывода |
+| `basenc` | base64 `aGVsbG8K`, base32 `NBSWY3DPBI======`, base32hex `D1IMOR3F18======`, base16 `68656C6C6F0A`; decode всех пяти; `-w 4` → `aGVs`/`bG8K`; base64url с `-`/`_` |
+| `gzip`/`gunzip` | `gzip -k` → `gunzip -f` → исходный текст; host stored-block `.gz` прочитан; guest `.gz` распакован Python `gzip.decompress` в `hello\n` |
+| `tar`/`untar` | create/list/extract `tree/` (5 записей), `cat tree/a.txt` → `tree file`, symlink → `a.txt`; host ustar с prefix-именем >100 символов прочитан; guest tar проверен Python `tarfile` (включая long name) |
+| `patch` | in-place + `.orig`, два hunks, `-p1`, `-o`, новый файл из `/dev/null`, `\ No newline` (проверено `xxd`), неверный контекст → exit 1 |
+| `cal` | `2 2024`, `1 1970`, `9 1752`, `-y 2024`, `cal`, `cal 2024` сверены с моделью Python `calendar` (7 колонок, воскресенье первым) |
+| usage/ошибки | неизвестная опция/лишний аргумент → 2; отсутствующий файл, неверная сумма, сломанный hunk/архив → 1 |
+| `pkg install` | `pkg: installed paghbox 1.5.0`; 94 симлинка; `/mnt/bin/md5sum` и `/mnt/bin/cal` работают |
 
-Дополнительно (опционально) проверен `pkg install paghbox` на чистом 64 MiB
-ext2 с `repo/` на хосте: `pkg: installed paghbox 1.4.0`, затем
-`run /mnt/bin/whoami` → `root`, `run /mnt/bin/xxd /mnt/hello.txt` → дамп, а
-`ls /mnt/bin` показывает `paghbox` и 82 симлинка. Это подтверждает, что
-`commands=` манифеста и `MAX_COMMANDS = 160` сходятся с реальным пакетом.
+Дополнительно проверен `pkg install paghbox` на чистом 64 MiB ext2 с `repo/`
+на хосте: `pkg: installed paghbox 1.5.0`, затем `run /mnt/bin/md5sum
+/mnt/abc.txt` → `900150983cd24fb0d6963f7d28e17f72  /mnt/abc.txt` и
+`run /mnt/bin/cal 2 2024` → корректная сетка февраля; `debugfs` показывает
+`paghbox` и 94 симлинка в `/mnt/bin`. Это подтверждает, что `commands=`
+манифеста и `MAX_COMMANDS = 160` сходятся с реальным пакетом.
 
 ## Ограничения среды и ABI
 
@@ -310,6 +322,25 @@ ext2 с `repo/` на хосте: `pkg: installed paghbox 1.4.0`, затем
   таблице `libpagh` нет ESRCH, поэтому `Errno::Unknown` на этом пути
   печатается как `No such process`. Шелл не раскрывает `$$`; безопасная проба —
   `kill -0 0`.
+* **`gzip`/`gunzip`:** только DEFLATE stored blocks (BTYPE=00) — поток валиден,
+  CRC-32 и ISIZE корректны, но данные не сжимаются; декодер отклоняет BTYPE 1/2,
+  `-t`/`-l`/`-r` нет, MTIME=0, уровни `-1..-9` принимаются без эффекта.
+* **`tar`/`untar`:** только ustar (без GNU longname/PAX, hardlinks, sparse и
+  сжатия); имя 100 + prefix 155 байт, size < 8 GiB; mtime из boot-часов; права
+  не восстанавливаются. При извлечении симлинк с абсолютной целью или `..`
+  отвергается, а `mkdirat('/mnt')` в 0.16.1 отвечает ENOTSUP, поэтому каталоги
+  создаются через stat-before-mkdir (см. `tar.rs`). Архив читается целиком.
+* **`patch`:** только unified diff на один файл; строгий контекст без fuzz и
+  поиска смещения, по умолчанию `-p0`; `.orig` перезаписывается; git-бинарные
+  патчи, context diff и переименования не поддерживаются.
+* **`basenc`:** base16/base32/base32hex/base64/base64url; нет base2/base8/
+  zbase32; decode принимает unpadded, но требует нулевые хвостовые биты.
+* **`md5sum` и остальные `*sum`:** файл читается целиком в память; MD5/SHA-1 —
+  только для совместимости; BLAKE2b без ключа; check-формат coreutils
+  (`hex  name`, `hex *name`), без `--tag` и «умного» поиска файла.
+* **`cal`:** пролептический григорианский календарь, UTC, английские имена;
+  «сегодня» — из epoch-часов ядра (RTC нет), поэтому после загрузки это
+  1970-01-01 + uptime; поддерживаются годы 1..9999.
 * **Ядро 0.16.1** уже даёт fork/exec/wait, файловые мутации, mmap, pipes, poll,
   sockets, threads и signals (52 syscall'а), но `paghbox` остаётся набором
   CLI-фильтров: шелл ядра не создаёт конвейеров, а `pkg` ставит один bundle.
@@ -320,11 +351,11 @@ ext2 с `repo/` на хосте: `pkg: installed paghbox 1.4.0`, затем
 `target/` и `repo/` в [`.gitignore`](.gitignore): бинарники не коммитятся.
 `repo/` полностью воспроизводится командой `python3 tools/build_repo.py` из
 исходников и пинованного тулчейна; индекс детерминирован по содержимому
-(единственный недетерминизм — сам ELF от rustc). Текущий пакет — 610960
-байт payload / 611641 байт `.ppkg`, 82 команды, SHA-256
-`3a4b2e0826856c4519783ef2c8edd87cf3f83120e0a52097ed96b1b528c68b28`; в git он не попал (`.gitignore`), его место — на
+(единственный недетерминизм — сам ELF от rustc). Текущий пакет — 743680
+байт payload / 744441 байт `.ppkg`, 94 команды, SHA-256
+`0a7f5c0230a09810553970771bf3fe12940b3fd12ac4e0b12f6dd3476a3595c4`; в git он не попал (`.gitignore`), его место — на
 HTTP-зеркале.
 
-`catalog.md` — ровно 120 уникальных имён; `[x]` стоят у 82 реализованных,
-остальные `[ ]`. Список проверяется `tools/live_test_140.py` и `grep`-ом по
-`NAMES`: все 82 имени входят в `commands=` пакета.
+`catalog.md` — ровно 120 уникальных имён; `[x]` стоят у 94 реализованных,
+остальные `[ ]`. Список проверяется `tools/live_test_150.py` и `grep`-ом по
+`NAMES`: все 94 имени входят в `commands=` пакета.

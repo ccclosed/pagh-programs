@@ -1,0 +1,428 @@
+# paghbox 1.5.0 live transcript (34 boots)
+
+===== boot 1: md5sum vectors =====
+pagh:rv64> run /mnt/paghbox md5sum /mnt/empty.txt /mnt/abc.txt /mnt/fox.txt
+d41d8cd98f00b204e9800998ecf8427e  /mnt/empty.txt
+900150983cd24fb0d6963f7d28e17f72  /mnt/abc.txt
+9e107d9d372bb6826bd81d3542a419d6  /mnt/fox.txt
+run: /mnt/paghbox exited with code 0
+
+===== boot 2: sha1sum vectors =====
+pagh:rv64> run /mnt/paghbox sha1sum /mnt/empty.txt /mnt/abc.txt /mnt/fox.txt
+da39a3ee5e6b4b0d3255bfef95601890afd80709  /mnt/empty.txt
+a9993e364706816aba3e25717850c26c9cd0d89d  /mnt/abc.txt
+2fd4e1c67a2d28fced849ee1bb76e7391b93eb12  /mnt/fox.txt
+run: /mnt/paghbox exited with code 0
+
+===== boot 3: sha256sum vectors =====
+pagh:rv64> run /mnt/paghbox sha256sum /mnt/empty.txt /mnt/abc.txt /mnt/fox.txt
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  /mnt/empty.txt
+ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad  /mnt/abc.txt
+d7a8fbb307d7809469ca9abcb0082e4f8d5651e46d3cdb762d02d0bf37c9e592  /mnt/fox.txt
+run: /mnt/paghbox exited with code 0
+
+===== boot 4: sha512sum vectors =====
+pagh:rv64> run /mnt/paghbox sha512sum /mnt/empty.txt /mnt/abc.txt /mnt/fox.txt
+cf83e1357eefb8bdf1542850d66d8007d620e4050b5715dc83f4a921d36ce9ce47d0d13c5d85f2b0ff8318d2877eec2f63b931bd47417a81a538327af927da3e  /mnt/empty.txt
+ddaf35a193617abacc417349ae20413112e6fa4e89a97ea20a9eeee64b55d39a2192992a274fc1a836ba3c23a3feebbd454d4423643ce80e2a9ac94fa54ca49f  /mnt/abc.txt
+07e547d9586f6a73f73fbac0435ed76951218fb7d0c8d788a309d785436bbb642e93a252a954f23912547d1e8a3b5ed6e1bfd7097821233fa0538f3db854fee6  /mnt/fox.txt
+run: /mnt/paghbox exited with code 0
+
+===== boot 5: b2sum vectors =====
+pagh:rv64> run /mnt/paghbox b2sum /mnt/empty.txt /mnt/abc.txt /mnt/fox.txt
+786a02f742015903c6c6fd852552d272912f4740e15847618a86e217f71f5419d25e1031afee585313896444934eb04b903a685b1448b755d56f701afe9be2ce  /mnt/empty.txt
+ba80a53f981c4d0d6a2797b69f12f6e94c212f14685ac4b74b12bb6fdbffa2d17d87c5392aab792dc252d5de4533cc9518d38aa8dbf1925ab92386edd4009923  /mnt/abc.txt
+a8add4bdddfd93e4877d2746e62817b116364a1fa7bc148d95090bc7333b3673f82401cf7aa2e4cb1ecd90296e3f14cb5413f8ed77be73045b13914cdcd6a918  /mnt/fox.txt
+run: /mnt/paghbox exited with code 0
+
+===== boot 6: hash options =====
+pagh:rv64> run /mnt/paghbox md5sum -b /mnt/abc.txt
+900150983cd24fb0d6963f7d28e17f72 */mnt/abc.txt
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox md5sum -c /mnt/sums.md5
+/mnt/abc.txt: OK
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox sha256sum -c /mnt/sums.sha256
+/mnt/abc.txt: OK
+run: /mnt/paghbox exited with code 0
+
+===== boot 7: hash check failure =====
+pagh:rv64> run /mnt/paghbox md5sum -c /mnt/sums.bad
+/mnt/abc.txt: FAILED
+md5sum: WARNING: 1 computed checksum(s) did NOT match
+run: /mnt/paghbox exited with code 1
+pagh:rv64> run /mnt/paghbox md5sum -c --status /mnt/sums.md5
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox md5sum -z
+md5sum: invalid option -- 'z'
+usage: md5sum [-b] [-c] [--quiet] [--status] [FILE...]
+run: /mnt/paghbox exited with code 2
+
+===== boot 8: basenc base64 =====
+pagh:rv64> run /mnt/paghbox basenc --base64 /mnt/plain.txt
+aGVsbG8K
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox basenc --base64 -d /mnt/b64.txt
+hello
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox basenc --base64url -d /mnt/weird64url.txt
+??>?
+run: /mnt/paghbox exited with code 0
+
+===== boot 9: basenc base32 =====
+pagh:rv64> run /mnt/paghbox basenc --base32 /mnt/plain.txt
+NBSWY3DPBI======
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox basenc --base32 -d /mnt/b32.txt
+hello
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox basenc --base32hex -d /mnt/b32hex.txt
+hello
+run: /mnt/paghbox exited with code 0
+
+===== boot 10: basenc base16 and wrap =====
+pagh:rv64> run /mnt/paghbox basenc --base16 /mnt/plain.txt
+68656C6C6F0A
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox basenc --base16 -d /mnt/b16.txt
+hello
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox basenc --base64 -w 4 /mnt/plain.txt
+aGVs
+bG8K
+run: /mnt/paghbox exited with code 0
+
+===== boot 11: basenc errors =====
+pagh:rv64> run /mnt/paghbox basenc /mnt/plain.txt
+basenc: missing encoding type
+usage: basenc (--base64|--base64url|--base32|--base32hex|--base16) [-d] [-w N] [FILE...]
+run: /mnt/paghbox exited with code 2
+pagh:rv64> run /mnt/paghbox basenc --base64 -d /mnt/bad64.txt
+basenc: invalid input
+run: /mnt/paghbox exited with code 1
+pagh:rv64> run /mnt/paghbox basenc -z
+basenc: invalid option -- 'z'
+usage: basenc (--base64|--base64url|--base32|--base32hex|--base16) [-d] [-w N] [FILE...]
+run: /mnt/paghbox exited with code 2
+
+===== boot 12: gzip round trip =====
+pagh:rv64> run /mnt/paghbox gzip -k /mnt/gzip_src.txt
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox gunzip -f /mnt/gzip_src.txt.gz
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox cat /mnt/gzip_src.txt
+stored gzip round trip
+run: /mnt/paghbox exited with code 0
+
+===== boot 13: gzip external member =====
+pagh:rv64> run /mnt/paghbox gzip -d -c /mnt/ext.gz
+external stored gzip
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox gunzip -c /mnt/ext.gz
+external stored gzip
+run: /mnt/paghbox exited with code 0
+
+===== boot 14: gzip naming =====
+pagh:rv64> run /mnt/paghbox gzip -k /mnt/plain.txt
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox gzip --keep /mnt/plain.txt
+gzip: /mnt/plain.txt.gz already exists; not overwritten
+run: /mnt/paghbox exited with code 1
+pagh:rv64> run /mnt/paghbox gzip -fk /mnt/plain.txt
+run: /mnt/paghbox exited with code 0
+
+===== boot 15: gzip errors =====
+pagh:rv64> run /mnt/paghbox gzip -d /mnt/plain.txt
+gzip: /mnt/plain.txt: unknown suffix -- ignored
+run: /mnt/paghbox exited with code 1
+pagh:rv64> run /mnt/paghbox gzip -z
+gzip: invalid option -- 'z'
+usage: gzip [-d] [-c] [-k] [-f] [FILE...]
+run: /mnt/paghbox exited with code 2
+pagh:rv64> run /mnt/paghbox gunzip -z
+gunzip: invalid option -- 'z'
+usage: gunzip [-c] [-k] [-f] [FILE...]
+run: /mnt/paghbox exited with code 2
+
+===== boot 16: tar create and list =====
+pagh:rv64> run /mnt/paghbox tar -cf /mnt/tree.tar -C /mnt tree
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox tar -tf /mnt/tree.tar
+tree/
+tree/a.txt
+tree/link
+tree/sub/
+tree/sub/b.txt
+run: /mnt/paghbox exited with code 0
+
+===== boot 17: tar extract =====
+pagh:rv64> run /mnt/paghbox tar -cf /mnt/tree.tar -C /mnt tree
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox tar -xf /mnt/tree.tar -C /mnt/out
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox cat /mnt/out/tree/a.txt
+tree file
+run: /mnt/paghbox exited with code 0
+
+===== boot 18: tar host archive =====
+pagh:rv64> run /mnt/paghbox tar -tf /mnt/ext.tar
+extdir/
+extdir/one.txt
+extdir/link
+longdddddddddddddddddddddddddddddddddddddddddddddddddd/
+longdddddddddddddddddddddddddddddddddddddddddddddddddd/fileffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
+run: /mnt/paghbox exited with code 0
+
+===== boot 19: tar host extract =====
+pagh:rv64> run /mnt/paghbox tar -xf /mnt/ext.tar -C /mnt/out2
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox readlink /mnt/out2/extdir/link
+one.txt
+run: /mnt/paghbox exited with code 0
+
+===== boot 20: untar alias =====
+pagh:rv64> run /mnt/paghbox untar -f /mnt/ext.tar -C /mnt/out2
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox cat /mnt/out2/extdir/one.txt
+host made
+run: /mnt/paghbox exited with code 0
+
+===== boot 21: tar long prefix =====
+pagh:rv64> run /mnt/paghbox tar -tf /mnt/long.tar
+longdddddddddddddddddddddddddddddddddddddddddddddddddd/
+longdddddddddddddddddddddddddddddddddddddddddddddddddd/fileffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
+run: /mnt/paghbox exited with code 0
+
+===== boot 22: tar usage =====
+pagh:rv64> run /mnt/paghbox tar -f /mnt/ext.tar
+usage: tar -c|-t|-x [-v] [-f FILE] [-C DIR] [FILE...]
+run: /mnt/paghbox exited with code 2
+pagh:rv64> run /mnt/paghbox tar -z
+tar: invalid option -- 'z'
+usage: tar -c|-t|-x [-v] [-f FILE] [-C DIR] [FILE...]
+run: /mnt/paghbox exited with code 2
+pagh:rv64> run /mnt/paghbox untar -c -f /mnt/ext.tar
+untar: conflicting mode option
+usage: untar [-v] [-f FILE] [-C DIR] [MEMBER...]
+run: /mnt/paghbox exited with code 2
+
+===== boot 23: patch in place =====
+pagh:rv64> run /mnt/paghbox patch -i /mnt/fix.patch
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox cat /mnt/patch_me.txt
+alpha
+beta changed
+gamma
+delta
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox cat /mnt/patch_me.txt.orig
+alpha
+beta
+gamma
+run: /mnt/paghbox exited with code 0
+
+===== boot 24: patch multiple hunks =====
+pagh:rv64> run /mnt/paghbox patch -i /mnt/multi.patch
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox cat /mnt/multi.txt
+one
+TWO
+two-and-a-half
+three
+four
+five
+six
+SEVEN
+eight
+run: /mnt/paghbox exited with code 0
+
+===== boot 25: patch -p1 =====
+pagh:rv64> run /mnt/paghbox patch -p1 -i /mnt/p1.patch
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox cat /mnt/multi2.txt
+red
+GREEN
+blue
+run: /mnt/paghbox exited with code 0
+
+===== boot 26: patch -o =====
+pagh:rv64> run /mnt/paghbox patch -o /mnt/patched.out -i /mnt/fix2.patch
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox cat /mnt/fix2_target.txt
+keep me
+change me
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox cat /mnt/patched.out
+keep me
+changed
+run: /mnt/paghbox exited with code 0
+
+===== boot 27: patch no newline =====
+pagh:rv64> run /mnt/paghbox patch -i /mnt/nonl.patch
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox xxd /mnt/nonl.txt
+00000000: 616c 7068 610a 6265 7461 21              alpha.beta!
+run: /mnt/paghbox exited with code 0
+
+===== boot 28: patch new file =====
+pagh:rv64> run /mnt/paghbox patch -p1 -i /mnt/newfile.patch
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox cat /mnt/created.txt
+first
+second
+run: /mnt/paghbox exited with code 0
+
+===== boot 29: patch failure and usage =====
+pagh:rv64> run /mnt/paghbox patch -i /mnt/bad.patch
+patch: hunk #1 failed at source line 1: expected 'not the first line', found 'alpha'
+run: /mnt/paghbox exited with code 1
+pagh:rv64> run /mnt/paghbox patch -i /mnt/badcount.patch
+patch: hunk at line 5 is truncated (old 2/5, new 2/2)
+run: /mnt/paghbox exited with code 1
+pagh:rv64> run /mnt/paghbox patch -p
+usage: patch [-p N] [-o OUT] [-i FILE] [PATCHFILE]
+run: /mnt/paghbox exited with code 2
+
+===== boot 30: cal months =====
+pagh:rv64> run /mnt/paghbox cal 2 2024
+   February 2024
+Su Mo Tu We Th Fr Sa
+             1  2  3
+ 4  5  6  7  8  9 10
+11 12 13 14 15 16 17
+18 19 20 21 22 23 24
+25 26 27 28 29
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox cal 1 1970
+    January 1970
+Su Mo Tu We Th Fr Sa
+             1  2  3
+ 4  5  6  7  8  9 10
+11 12 13 14 15 16 17
+18 19 20 21 22 23 24
+25 26 27 28 29 30 31
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox cal 9 1752
+   September 1752
+Su Mo Tu We Th Fr Sa
+                1  2
+ 3  4  5  6  7  8  9
+10 11 12 13 14 15 16
+17 18 19 20 21 22 23
+24 25 26 27 28 29 30
+run: /mnt/paghbox exited with code 0
+
+===== boot 31: cal year grid =====
+pagh:rv64> run /mnt/paghbox cal -y 2024
+                              2024
+
+    January 2024         February 2024           March 2024
+Su Mo Tu We Th Fr Sa  Su Mo Tu We Th Fr Sa  Su Mo Tu We Th Fr Sa
+    1  2  3  4  5  6               1  2  3                  1  2
+ 7  8  9 10 11 12 13   4  5  6  7  8  9 10   3  4  5  6  7  8  9
+14 15 16 17 18 19 20  11 12 13 14 15 16 17  10 11 12 13 14 15 16
+21 22 23 24 25 26 27  18 19 20 21 22 23 24  17 18 19 20 21 22 23
+28 29 30 31           25 26 27 28 29        24 25 26 27 28 29 30
+                                            31
+
+     April 2024             May 2024             June 2024
+Su Mo Tu We Th Fr Sa  Su Mo Tu We Th Fr Sa  Su Mo Tu We Th Fr Sa
+    1  2  3  4  5  6            1  2  3  4                     1
+ 7  8  9 10 11 12 13   5  6  7  8  9 10 11   2  3  4  5  6  7  8
+14 15 16 17 18 19 20  12 13 14 15 16 17 18   9 10 11 12 13 14 15
+21 22 23 24 25 26 27  19 20 21 22 23 24 25  16 17 18 19 20 21 22
+28 29 30              26 27 28 29 30 31     23 24 25 26 27 28 29
+                                            30
+
+     July 2024            August 2024          September 2024
+Su Mo Tu We Th Fr Sa  Su Mo Tu We Th Fr Sa  Su Mo Tu We Th Fr Sa
+    1  2  3  4  5  6               1  2  3   1  2  3  4  5  6  7
+ 7  8  9 10 11 12 13   4  5  6  7  8  9 10   8  9 10 11 12 13 14
+14 15 16 17 18 19 20  11 12 13 14 15 16 17  15 16 17 18 19 20 21
+21 22 23 24 25 26 27  18 19 20 21 22 23 24  22 23 24 25 26 27 28
+28 29 30 31           25 26 27 28 29 30 31  29 30
+
+
+    October 2024         November 2024         December 2024
+Su Mo Tu We Th Fr Sa  Su Mo Tu We Th Fr Sa  Su Mo Tu We Th Fr Sa
+       1  2  3  4  5                  1  2   1  2  3  4  5  6  7
+ 6  7  8  9 10 11 12   3  4  5  6  7  8  9   8  9 10 11 12 13 14
+13 14 15 16 17 18 19  10 11 12 13 14 15 16  15 16 17 18 19 20 21
+20 21 22 23 24 25 26  17 18 19 20 21 22 23  22 23 24 25 26 27 28
+27 28 29 30 31        24 25 26 27 28 29 30  29 30 31
+
+run: /mnt/paghbox exited with code 0
+
+===== boot 32: cal current and y =====
+pagh:rv64> run /mnt/paghbox cal
+    January 1970
+Su Mo Tu We Th Fr Sa
+             1  2  3
+ 4  5  6  7  8  9 10
+11 12 13 14 15 16 17
+18 19 20 21 22 23 24
+25 26 27 28 29 30 31
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox cal 2024
+                              2024
+
+    January 2024         February 2024           March 2024
+Su Mo Tu We Th Fr Sa  Su Mo Tu We Th Fr Sa  Su Mo Tu We Th Fr Sa
+    1  2  3  4  5  6               1  2  3                  1  2
+ 7  8  9 10 11 12 13   4  5  6  7  8  9 10   3  4  5  6  7  8  9
+14 15 16 17 18 19 20  11 12 13 14 15 16 17  10 11 12 13 14 15 16
+21 22 23 24 25 26 27  18 19 20 21 22 23 24  17 18 19 20 21 22 23
+28 29 30 31           25 26 27 28 29        24 25 26 27 28 29 30
+                                            31
+
+     April 2024             May 2024             June 2024
+Su Mo Tu We Th Fr Sa  Su Mo Tu We Th Fr Sa  Su Mo Tu We Th Fr Sa
+    1  2  3  4  5  6            1  2  3  4                     1
+ 7  8  9 10 11 12 13   5  6  7  8  9 10 11   2  3  4  5  6  7  8
+14 15 16 17 18 19 20  12 13 14 15 16 17 18   9 10 11 12 13 14 15
+21 22 23 24 25 26 27  19 20 21 22 23 24 25  16 17 18 19 20 21 22
+28 29 30              26 27 28 29 30 31     23 24 25 26 27 28 29
+                                            30
+
+     July 2024            August 2024          September 2024
+Su Mo Tu We Th Fr Sa  Su Mo Tu We Th Fr Sa  Su Mo Tu We Th Fr Sa
+    1  2  3  4  5  6               1  2  3   1  2  3  4  5  6  7
+ 7  8  9 10 11 12 13   4  5  6  7  8  9 10   8  9 10 11 12 13 14
+14 15 16 17 18 19 20  11 12 13 14 15 16 17  15 16 17 18 19 20 21
+21 22 23 24 25 26 27  18 19 20 21 22 23 24  22 23 24 25 26 27 28
+28 29 30 31           25 26 27 28 29 30 31  29 30
+
+
+    October 2024         November 2024         December 2024
+Su Mo Tu We Th Fr Sa  Su Mo Tu We Th Fr Sa  Su Mo Tu We Th Fr Sa
+       1  2  3  4  5                  1  2   1  2  3  4  5  6  7
+ 6  7  8  9 10 11 12   3  4  5  6  7  8  9   8  9 10 11 12 13 14
+13 14 15 16 17 18 19  10 11 12 13 14 15 16  15 16 17 18 19 20 21
+20 21 22 23 24 25 26  17 18 19 20 21 22 23  22 23 24 25 26 27 28
+27 28 29 30 31        24 25 26 27 28 29 30  29 30 31
+
+run: /mnt/paghbox exited with code 0
+
+===== boot 33: cal usage =====
+pagh:rv64> run /mnt/paghbox cal 13 2024
+cal: month must be 1..12: '13'
+run: /mnt/paghbox exited with code 2
+pagh:rv64> run /mnt/paghbox cal 2 0
+cal: invalid year: '0'
+run: /mnt/paghbox exited with code 2
+pagh:rv64> run /mnt/paghbox cal -z
+cal: invalid option -- 'z'
+usage: cal [-y] [MONTH] [YEAR]
+run: /mnt/paghbox exited with code 2
+
+===== boot 34: host artifacts =====
+pagh:rv64> run /mnt/paghbox gzip -k /mnt/plain.txt
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox tar -cf /mnt/tree.tar -C /mnt tree longdddddddddddddddddddddddddddddddddddddddddddddddddd
+run: /mnt/paghbox exited with code 0
+
+===== host compatibility =====
+$ debugfs dump /plain.txt.gz; python3 gzip.decompress
+$ debugfs dump /tree.tar; python3 tarfile
+PASS host gzip: gzip.decompress(guest /plain.txt.gz) == b'hello\n'
+PASS host tar: tarfile read guest /tree.tar (tree + long name)
