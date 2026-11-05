@@ -14,8 +14,10 @@
 //! Negative values are accepted. Arithmetic is exact decimal/u128 — no floating
 //! point is used, so the host kernel's FPU policy cannot change a result.
 //!
-//! Output with a selected unit has one decimal place (rounded half away from
-//! zero); a value below the smallest unit is printed as an exact decimal.
+//! Output with a selected unit has one decimal place, rounded away from zero
+//! (GNU numfmt's default `from-zero`); a rounded value that reaches the next
+//! unit is promoted (`999999` → `1.0M`). A value below the smallest unit is
+//! printed as an exact decimal.
 //! `--to=auto` chooses IEC for a value that is at least 1024 and exactly
 //! divisible by 1024, otherwise SI at 1000 and above, otherwise plain. SI uses
 //! the lowercase `k`, IEC the uppercase `K`.
@@ -421,13 +423,28 @@ fn format_scaled(
 
     let mut integer = numerator / scaled_denominator;
     let remainder = numerator % scaled_denominator;
+    // Away-from-zero rounding: ceil(magnitude * 10) in tenths. The addition is
+    // the ceiling adjustment for the fractional part.
     let mut tenths = match remainder.checked_mul(10) {
-        Some(value) => (value + scaled_denominator / 2) / scaled_denominator,
-        None => 0,
+        Some(value) => value.saturating_add(scaled_denominator.saturating_sub(1))
+            / scaled_denominator,
+        None => 10,
     };
     if tenths >= 10 {
         integer = integer.saturating_add(1);
         tenths = 0;
+    }
+    let mut power = power;
+    // 999999 rounds to 1000.0k; GNU prints 1.0M, so promote one unit after
+    // rounding. Selection above guarantees integer <= base at this point.
+    if integer >= base && power < 6 {
+        integer /= base;
+        if tenths != 0 {
+            // A promoted value keeps its one-decimal form only if the ceiling
+            // left a fraction; at a unit boundary it is exactly zero.
+            tenths = 0;
+        }
+        power += 1;
     }
     let mut out = alloc::format!("{}.{}{}", integer, tenths, units[power as usize]);
     if negative && numerator != 0 {

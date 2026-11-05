@@ -161,6 +161,10 @@ CASES: list[tuple[str, list[Check]]] = [
         c("numfmt invalid", "numfmt --to=si abc", code=1,
           output="numfmt: invalid number: 'abc'"),
     ]),
+    ("numfmt rounding", [
+        c("numfmt from-zero", "numfmt --to=si 1234567 999999 1100001",
+          output="1.3M\n1.0M\n1.2M"),
+    ]),
     ("diff add/delete", [
         c("diff insert", "diff /mnt/diff_ins.txt /mnt/diff1.txt", code=1,
           output="1a2\n> b\n2a4\n> d"),
