@@ -1,5 +1,5 @@
-//! Hash primitives shared by `md5sum`, `sha1sum`, `sha256sum`, `sha512sum`
-//! and `b2sum`.
+//! Hash primitives shared by `md5sum`, `sha1sum`, `sha224sum`, `sha256sum`,
+//! `sha384sum`, `sha512sum` and `b2sum`.
 //!
 //! The module is deliberately free of `libpagh` types: the applets read a file
 //! and call [`hash`], and the same file can be compiled by a host `rustc` for
@@ -11,19 +11,24 @@
 //!
 //! * MD5 (RFC 1321);
 //! * SHA-1 (FIPS 180-4);
-//! * SHA-256 and SHA-512 (FIPS 180-4);
+//! * SHA-224 and SHA-256, SHA-384 and SHA-512 (FIPS 180-4). SHA-224 is
+//!   SHA-256 with the SHA-224 IV and a 28-byte truncation; SHA-384 is SHA-512
+//!   with the SHA-384 IV and a 48-byte truncation. The compression function is
+//!   shared, as the standard defines it;
 //! * BLAKE2b-512, unkeyed (RFC 7693).
 //!
 //! Each is a one-shot implementation: the caller supplies the whole message.
 //! That is the same memory policy as `sort`, `diff` and the other whole-file
 //! applets in this bundle.
 
-/// The digest algorithms exposed by the five `*sum` applets.
+/// The digest algorithms exposed by the seven `*sum` applets.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Algorithm {
     Md5,
     Sha1,
+    Sha224,
     Sha256,
+    Sha384,
     Sha512,
     Blake2b,
 }
@@ -34,7 +39,9 @@ impl Algorithm {
         match self {
             Algorithm::Md5 => 16,
             Algorithm::Sha1 => 20,
+            Algorithm::Sha224 => 28,
             Algorithm::Sha256 => 32,
+            Algorithm::Sha384 => 48,
             Algorithm::Sha512 => 64,
             Algorithm::Blake2b => 64,
         }
@@ -46,7 +53,9 @@ impl Algorithm {
         match self {
             Algorithm::Md5 => "md5sum",
             Algorithm::Sha1 => "sha1sum",
+            Algorithm::Sha224 => "sha224sum",
             Algorithm::Sha256 => "sha256sum",
+            Algorithm::Sha384 => "sha384sum",
             Algorithm::Sha512 => "sha512sum",
             Algorithm::Blake2b => "b2sum",
         }
@@ -70,10 +79,20 @@ pub fn hash(algorithm: Algorithm, data: &[u8]) -> ([u8; 64], usize) {
             out[..20].copy_from_slice(&digest);
             (out, 20)
         }
+        Algorithm::Sha224 => {
+            let digest = sha224(data);
+            out[..28].copy_from_slice(&digest);
+            (out, 28)
+        }
         Algorithm::Sha256 => {
             let digest = sha256(data);
             out[..32].copy_from_slice(&digest);
             (out, 32)
+        }
+        Algorithm::Sha384 => {
+            let digest = sha384(data);
+            out[..48].copy_from_slice(&digest);
+            (out, 48)
         }
         Algorithm::Sha512 => {
             let digest = sha512(data);
@@ -267,12 +286,31 @@ const SHA256_K: [u32; 64] = [
     0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2,
 ];
 
-fn sha256(data: &[u8]) -> [u8; 32] {
-    let mut state: [u32; 8] = [
-        0x6a09_e667, 0xbb67_ae85, 0x3c6e_f372, 0xa54f_f53a, 0x510e_527f, 0x9b05_688c, 0x1f83_d9ab,
-        0x5be0_cd19,
-    ];
+const SHA256_IV: [u32; 8] = [
+    0x6a09_e667, 0xbb67_ae85, 0x3c6e_f372, 0xa54f_f53a, 0x510e_527f, 0x9b05_688c, 0x1f83_d9ab,
+    0x5be0_cd19,
+];
 
+/// FIPS 180-4 SHA-224 initial state. SHA-224 shares the SHA-256 compression
+/// function and differs only in the IV and in truncating the output to 28
+/// bytes (the last 32-bit word of the SHA-256 state is discarded).
+const SHA224_IV: [u32; 8] = [
+    0xc105_9ed8, 0x367c_d507, 0x3070_dd17, 0xf70e_5939, 0xffc0_0b31, 0x6858_1511, 0x64f9_8fa7,
+    0xbefa_4fa4,
+];
+
+fn sha256(data: &[u8]) -> [u8; 32] {
+    sha256_with_iv(data, SHA256_IV)
+}
+
+fn sha224(data: &[u8]) -> [u8; 28] {
+    let digest = sha256_with_iv(data, SHA224_IV);
+    let mut out = [0u8; 28];
+    out.copy_from_slice(&digest[..28]);
+    out
+}
+
+fn sha256_with_iv(data: &[u8], mut state: [u32; 8]) -> [u8; 32] {
     let full = data.len() / 64 * 64;
     let mut offset = 0usize;
     while offset < full {
@@ -384,18 +422,43 @@ const SHA512_K: [u64; 80] = [
     0x4cc5d4becb3e42b6, 0x597f299cfc657e2a, 0x5fcb6fab3ad6faec, 0x6c44198c4a475817,
 ];
 
-fn sha512(data: &[u8]) -> [u8; 64] {
-    let mut state: [u64; 8] = [
-        0x6a09e667f3bcc908,
-        0xbb67ae8584caa73b,
-        0x3c6ef372fe94f82b,
-        0xa54ff53a5f1d36f1,
-        0x510e527fade682d1,
-        0x9b05688c2b3e6c1f,
-        0x1f83d9abfb41bd6b,
-        0x5be0cd19137e2179,
-    ];
+const SHA512_IV: [u64; 8] = [
+    0x6a09e667f3bcc908,
+    0xbb67ae8584caa73b,
+    0x3c6ef372fe94f82b,
+    0xa54ff53a5f1d36f1,
+    0x510e527fade682d1,
+    0x9b05688c2b3e6c1f,
+    0x1f83d9abfb41bd6b,
+    0x5be0cd19137e2179,
+];
 
+/// FIPS 180-4 SHA-384 initial state. SHA-384 shares the SHA-512 compression
+/// function and differs only in the IV and in truncating the output to 48
+/// bytes (the last two 64-bit words of the SHA-512 state are discarded).
+const SHA384_IV: [u64; 8] = [
+    0xcbbb9d5dc1059ed8,
+    0x629a292a367cd507,
+    0x9159015a3070dd17,
+    0x152fecd8f70e5939,
+    0x67332667ffc00b31,
+    0x8eb44a8768581511,
+    0xdb0c2e0d64f98fa7,
+    0x47b5481dbefa4fa4,
+];
+
+fn sha512(data: &[u8]) -> [u8; 64] {
+    sha512_with_iv(data, SHA512_IV)
+}
+
+fn sha384(data: &[u8]) -> [u8; 48] {
+    let digest = sha512_with_iv(data, SHA384_IV);
+    let mut out = [0u8; 48];
+    out.copy_from_slice(&digest[..48]);
+    out
+}
+
+fn sha512_with_iv(data: &[u8], mut state: [u64; 8]) -> [u8; 64] {
     let full = data.len() / 128 * 128;
     let mut offset = 0usize;
     while offset < full {

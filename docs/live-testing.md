@@ -1,5 +1,145 @@
 # Живые прогоны paghbox
 
+## 1.7.0 (батч 8)
+
+Дата: 2026-11-06. Ядро: `/home/oleg/pagh-riscv/target/riscv64gc-unknown-none-elf/debug/pagh`
+(main 0.16.1; `run /mnt/paghbox uname -a` в QEMU печатает
+`pagh pagh-riscv 0.10.0 0.16.1 riscv64`). QEMU `qemu-system-riscv64` 10.2.2,
+машина `virt`, 256 MiB, serial на Unix-сокете, `-bios default`, modern virtio
+(`-global virtio-mmio.force-legacy=false`). Диск: 64 MiB ext2, создан на хосте
+`mke2fs -q -t ext2 -F -b 4096 -d rootfs disk.img 64M`; в корне — `paghbox`
+1.7.0, `/mnt/bin`-симлинки на `echo`/`sleep`/`true`/`false`/`cat` и фикстуры:
+`empty.txt`/`abc.txt`/`fox.txt`/`numbers.txt`, `hello.txt`, hex-файлы
+(`hello.hex`, `hexspaced.txt`, `badhex*.txt`), base58-векторы
+(`b58hello.txt`, `b58abc.txt`, `b58bad.txt`, `zeros.bin`), check-файлы
+`sums.sha224*`/`sums.sha384*`/`crc32.*` и gzip-потоки: `stored.gz` и
+`stored2.gz` (host `gzip.compress(compresslevel=0)`, DEFLATE stored blocks),
+`compressed.gz` (level 9) и `bad.gz`.
+
+Драйвер — [`tools/live_test_170.py`](../tools/live_test_170.py): **14 загрузок
+по 3 команды**, после каждой проверялись вывод и
+`run: /mnt/paghbox exited with code N`. Итог: **42 PASS, 0 FAIL**; все 7 новых
+applet'ов проверены функционально, коды 0/1/2 и точные хэш-векторы сверены с
+эталонами Python `hashlib`/`zlib`.
+
+Сырой транскрипт: [`live-1.7.0-transcript.txt`](live-1.7.0-transcript.txt).
+
+### Итог 1.7.0
+
+* `sha224sum` — векторы FIPS 180-4 для `empty`/`abc`/`fox` совпали
+  (`d14a…`, `2309…`, `730e…`); `-b` даёт `hex *name`, `-c` — `OK`, неверная
+  сумма — `FAILED` + exit 1, `--status` подавляет вывод, неизвестная опция —
+  exit 2. SHA-224 переиспользует SHA-256 с другим IV и усечением до 28 байт.
+* `sha384sum` — те же три вектора (`38b0…`, `cb00…`, `ca73…`), тот же
+  интерфейс `-b`/`-c`/`--status`; SHA-384 — SHA-512 с другим IV и усечением
+  до 48 байт.
+* `crc32` — `123456789` → `cbf43926 9 /mnt/numbers.txt`, `abc` →
+  `352441c2 3`, пустой файл → `00000000 0`; `-c` по формату
+  `crc size name` даёт `OK`, неверное значение — `FAILED` + exit 1,
+  кривая строка — предупреждение и exit 1.
+* `base58` — `hello\n` → `tzCkV5DK`, `00 01` → `12` (ведущий нулевой байт
+  как `1`); decode возвращает `hello`/`abc`; `0OIl` → `invalid input` и
+  exit 1; лишний операнд — exit 2.
+* `hex2bin`/`bin2hex` — `61 62\n63\t0a` → `decoded.bin` → `6162630a`
+  (round-trip через файл); lowercase `68656c6c6f0a`, `-u` →
+  `68656C6C6F0A`, `-w 4` → `6865`/`6c6c`/`6f0a`; неверный hex и плохая
+  ширина — exit 1/2.
+* `zcat` — host stored-block `stored.gz` → `zcat stored payload`, два
+  concatenated member'а → обе строки; `compressed.gz` (BTYPE 1/2) →
+  `compressed DEFLATE blocks are not supported` exit 1, `bad.gz` → `bad gzip
+  magic` exit 1, отсутствующий файл → exit 1, `-c` → usage exit 2.
+
+### PASS-строки 1.7.0
+
+```text
+PASS sha224 empty: run /mnt/paghbox sha224sum /mnt/empty.txt
+PASS sha224 abc: run /mnt/paghbox sha224sum /mnt/abc.txt
+PASS sha224 fox: run /mnt/paghbox sha224sum /mnt/fox.txt
+PASS sha224 -b: run /mnt/paghbox sha224sum -b /mnt/abc.txt
+PASS sha224 check: run /mnt/paghbox sha224sum -c /mnt/sums.sha224
+PASS sha224 bad check: run /mnt/paghbox sha224sum -c /mnt/sums.sha224.bad
+PASS sha384 empty: run /mnt/paghbox sha384sum /mnt/empty.txt
+PASS sha384 abc: run /mnt/paghbox sha384sum /mnt/abc.txt
+PASS sha384 fox: run /mnt/paghbox sha384sum /mnt/fox.txt
+PASS sha384 -b: run /mnt/paghbox sha384sum -b /mnt/abc.txt
+PASS sha384 check: run /mnt/paghbox sha384sum -c /mnt/sums.sha384
+PASS sha384 bad check: run /mnt/paghbox sha384sum -c /mnt/sums.sha384.bad
+PASS sha224 status ok: run /mnt/paghbox sha224sum --status -c /mnt/sums.sha224
+PASS sha384 status bad: run /mnt/paghbox sha384sum --status -c /mnt/sums.sha384.bad
+PASS sha224 bad option: run /mnt/paghbox sha224sum -z
+PASS crc32 check value: run /mnt/paghbox crc32 /mnt/numbers.txt
+PASS crc32 abc: run /mnt/paghbox crc32 /mnt/abc.txt
+PASS crc32 empty: run /mnt/paghbox crc32 /mnt/empty.txt
+PASS crc32 check ok: run /mnt/paghbox crc32 -c /mnt/crc32.good
+PASS crc32 check bad: run /mnt/paghbox crc32 -c /mnt/crc32.bad
+PASS crc32 malformed: run /mnt/paghbox crc32 -c /mnt/crc32.malformed
+PASS base58 hello: run /mnt/paghbox base58 /mnt/hello.txt
+PASS base58 leading zero: run /mnt/paghbox base58 /mnt/zeros.bin
+PASS base58 usage: run /mnt/paghbox base58 /mnt/hello.txt /mnt/abc.txt
+PASS base58 decode hello: run /mnt/paghbox base58 -d /mnt/b58hello.txt
+PASS base58 decode abc: run /mnt/paghbox base58 -d /mnt/b58abc.txt
+PASS base58 invalid: run /mnt/paghbox base58 -d /mnt/b58bad.txt
+PASS hex2bin write: run /mnt/paghbox hex2bin -o /mnt/decoded.bin /mnt/hexspaced.txt
+PASS hex2bin round trip: run /mnt/paghbox bin2hex /mnt/decoded.bin
+PASS hex2bin invalid: run /mnt/paghbox hex2bin /mnt/badhexchar.txt
+PASS bin2hex lower: run /mnt/paghbox bin2hex /mnt/hello.txt
+PASS bin2hex upper: run /mnt/paghbox bin2hex -u /mnt/hello.txt
+PASS bin2hex wrap: run /mnt/paghbox bin2hex -w 4 /mnt/hello.txt
+PASS bin2hex bad width: run /mnt/paghbox bin2hex -w x /mnt/hello.txt
+PASS bin2hex missing: run /mnt/paghbox bin2hex /mnt/nope.bin
+PASS bin2hex stdout hex2bin: run /mnt/paghbox hex2bin -o - /mnt/hello.hex
+PASS zcat stored: run /mnt/paghbox zcat /mnt/stored.gz
+PASS zcat concatenated: run /mnt/paghbox zcat /mnt/stored2.gz
+PASS zcat compressed: run /mnt/paghbox zcat /mnt/compressed.gz
+PASS zcat bad magic: run /mnt/paghbox zcat /mnt/bad.gz
+PASS zcat bad option: run /mnt/paghbox zcat -c /mnt/stored.gz
+PASS zcat missing: run /mnt/paghbox zcat /mnt/nope.gz
+```
+
+### Показательные выводы 1.7.0
+
+```text
+run /mnt/paghbox sha224sum /mnt/abc.txt
+23097d223405d8228642a477bda255b32aadbce4bda0b3f7e36c9da7  /mnt/abc.txt
+
+run /mnt/paghbox sha384sum /mnt/fox.txt
+ca737f1014a48f4c0b6dd43cb177b0afd9e5169367544c494011e3317dbf9a509cb1e5dc1e85a941bbee3d7f2afbc9b1  /mnt/fox.txt
+
+run /mnt/paghbox crc32 /mnt/numbers.txt
+cbf43926 9 /mnt/numbers.txt
+
+run /mnt/paghbox base58 /mnt/hello.txt
+tzCkV5DK
+
+run /mnt/paghbox bin2hex -w 4 /mnt/hello.txt
+6865
+6c6c
+6f0a
+
+run /mnt/paghbox zcat /mnt/stored2.gz
+zcat stored payload
+second member
+```
+
+### Чем проверка 1.7.0 ограничена
+
+* **Только stored-block gzip.** `zcat`/`gunzip` понимают DEFLATE BTYPE=00 —
+  ровно то, что пишет `gzip` этого порта и `gzip.compress(level=0)`; поток с
+  BTYPE 1/2 отвергается (проверено `compressed.gz`). Это ограничение
+  декодера, а не `zcat`.
+* **Нет пайпов.** Round-trip `hex2bin` → `bin2hex` и `base58` проверен через
+  файлы (`hex2bin -o`, затем отдельный запуск `bin2hex`), потому что шелл
+  ядра не умеет конвейеры и редиректы.
+* **stdin без EOF.** Все проверки используют файловые операнды; ветки
+  «файл или stdin» реализованы через `util::read_input`, но консольный fd 0
+  не даёт EOF, поэтому stdin-режим в QEMU не завершается.
+* **`crc32` печатает hex**, а не десятичное число POSIX `cksum`; `-c`
+  принимает только собственный формат `crc size name`.
+* **`base58`** — Bitcoin-алфавит без checksum (base58check нет); decode
+  игнорирует ASCII whitespace, чтобы читать свой же вывод с `\n`.
+* Serial-драйвер иногда теряет длинную очередь ввода; поэтому 3 команды на
+  загрузку и один retry на свежем образе.
+
 ## 1.6.0 (батч 7)
 
 Дата: 2026-11-06. Ядро: `/home/oleg/pagh-riscv/target/riscv64gc-unknown-none-elf/debug/pagh`

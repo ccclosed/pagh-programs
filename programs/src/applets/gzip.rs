@@ -255,7 +255,7 @@ fn encode_stream(data: &[u8]) -> Result<Vec<u8>, &'static str> {
     Ok(out)
 }
 
-fn decode_stream(data: &[u8]) -> Result<Vec<u8>, &'static str> {
+pub(crate) fn decode_stream(data: &[u8]) -> Result<Vec<u8>, &'static str> {
     if data.is_empty() {
         return Err("empty input");
     }

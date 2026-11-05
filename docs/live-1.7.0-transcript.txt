@@ -1,0 +1,160 @@
+# paghbox 1.7.0 live transcript (14 boots)
+
+===== boot 1: sha224 known vectors =====
+pagh:rv64> run /mnt/paghbox sha224sum /mnt/empty.txt
+d14a028c2a3a2bc9476102bb288234c415a2b01f828ea62ac5b3e42f  /mnt/empty.txt
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox sha224sum /mnt/abc.txt
+23097d223405d8228642a477bda255b32aadbce4bda0b3f7e36c9da7  /mnt/abc.txt
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox sha224sum /mnt/fox.txt
+730e109bd7a8a32b1cb9d9a09aa2325d2430587ddbc0c38bad911525  /mnt/fox.txt
+run: /mnt/paghbox exited with code 0
+
+===== boot 2: sha224 options =====
+pagh:rv64> run /mnt/paghbox sha224sum -b /mnt/abc.txt
+23097d223405d8228642a477bda255b32aadbce4bda0b3f7e36c9da7 */mnt/abc.txt
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox sha224sum -c /mnt/sums.sha224
+/mnt/abc.txt: OK
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox sha224sum -c /mnt/sums.sha224.bad
+/mnt/abc.txt: FAILED
+sha224sum: WARNING: 1 computed checksum(s) did NOT match
+run: /mnt/paghbox exited with code 1
+
+===== boot 3: sha384 known vectors =====
+pagh:rv64> run /mnt/paghbox sha384sum /mnt/empty.txt
+38b060a751ac96384cd9327eb1b1e36a21fdb71114be07434c0cc7bf63f6e1da274edebfe76f65fbd51ad2f14898b95b  /mnt/empty.txt
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox sha384sum /mnt/abc.txt
+cb00753f45a35e8bb5a03d699ac65007272c32ab0eded1631a8b605a43ff5bed8086072ba1e7cc2358baeca134c825a7  /mnt/abc.txt
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox sha384sum /mnt/fox.txt
+ca737f1014a48f4c0b6dd43cb177b0afd9e5169367544c494011e3317dbf9a509cb1e5dc1e85a941bbee3d7f2afbc9b1  /mnt/fox.txt
+run: /mnt/paghbox exited with code 0
+
+===== boot 4: sha384 options =====
+pagh:rv64> run /mnt/paghbox sha384sum -b /mnt/abc.txt
+cb00753f45a35e8bb5a03d699ac65007272c32ab0eded1631a8b605a43ff5bed8086072ba1e7cc2358baeca134c825a7 */mnt/abc.txt
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox sha384sum -c /mnt/sums.sha384
+/mnt/abc.txt: OK
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox sha384sum -c /mnt/sums.sha384.bad
+/mnt/abc.txt: FAILED
+sha384sum: WARNING: 1 computed checksum(s) did NOT match
+run: /mnt/paghbox exited with code 1
+
+===== boot 5: hash status and usage =====
+pagh:rv64> run /mnt/paghbox sha224sum --status -c /mnt/sums.sha224
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox sha384sum --status -c /mnt/sums.sha384.bad
+run: /mnt/paghbox exited with code 1
+pagh:rv64> run /mnt/paghbox sha224sum -z
+sha224sum: invalid option -- 'z'
+usage: sha224sum [-b] [-c] [--quiet] [--status] [FILE...]
+run: /mnt/paghbox exited with code 2
+
+===== boot 6: crc32 vectors =====
+pagh:rv64> run /mnt/paghbox crc32 /mnt/numbers.txt
+cbf43926 9 /mnt/numbers.txt
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox crc32 /mnt/abc.txt
+352441c2 3 /mnt/abc.txt
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox crc32 /mnt/empty.txt
+00000000 0 /mnt/empty.txt
+run: /mnt/paghbox exited with code 0
+
+===== boot 7: crc32 check mode =====
+pagh:rv64> run /mnt/paghbox crc32 -c /mnt/crc32.good
+/mnt/numbers.txt: OK
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox crc32 -c /mnt/crc32.bad
+/mnt/numbers.txt: FAILED
+crc32: WARNING: 1 computed checksum(s) did NOT match
+run: /mnt/paghbox exited with code 1
+pagh:rv64> run /mnt/paghbox crc32 -c /mnt/crc32.malformed
+crc32: WARNING: 1 line(s) are improperly formatted
+run: /mnt/paghbox exited with code 1
+
+===== boot 8: base58 encode =====
+pagh:rv64> run /mnt/paghbox base58 /mnt/hello.txt
+tzCkV5DK
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox base58 /mnt/zeros.bin
+12
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox base58 /mnt/hello.txt /mnt/abc.txt
+usage: base58 [-d] [FILE]
+run: /mnt/paghbox exited with code 2
+
+===== boot 9: base58 decode =====
+pagh:rv64> run /mnt/paghbox base58 -d /mnt/b58hello.txt
+hello
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox base58 -d /mnt/b58abc.txt
+abc
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox base58 -d /mnt/b58bad.txt
+base58: invalid input
+run: /mnt/paghbox exited with code 1
+
+===== boot 10: hex2bin decode =====
+pagh:rv64> run /mnt/paghbox hex2bin -o /mnt/decoded.bin /mnt/hexspaced.txt
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox bin2hex /mnt/decoded.bin
+6162630a
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox hex2bin /mnt/badhexchar.txt
+hex2bin: invalid hex input
+run: /mnt/paghbox exited with code 1
+
+===== boot 11: bin2hex encode =====
+pagh:rv64> run /mnt/paghbox bin2hex /mnt/hello.txt
+68656c6c6f0a
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox bin2hex -u /mnt/hello.txt
+68656C6C6F0A
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox bin2hex -w 4 /mnt/hello.txt
+6865
+6c6c
+6f0a
+run: /mnt/paghbox exited with code 0
+
+===== boot 12: bin2hex bad input =====
+pagh:rv64> run /mnt/paghbox bin2hex -w x /mnt/hello.txt
+bin2hex: invalid wrap width: 'x'
+run: /mnt/paghbox exited with code 2
+pagh:rv64> run /mnt/paghbox bin2hex /mnt/nope.bin
+bin2hex: /mnt/nope.bin: No such file or directory
+run: /mnt/paghbox exited with code 1
+pagh:rv64> run /mnt/paghbox hex2bin -o - /mnt/hello.hex
+hello
+run: /mnt/paghbox exited with code 0
+
+===== boot 13: zcat stored gzip =====
+pagh:rv64> run /mnt/paghbox zcat /mnt/stored.gz
+zcat stored payload
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox zcat /mnt/stored2.gz
+zcat stored payload
+second member
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox zcat /mnt/compressed.gz
+zcat: /mnt/compressed.gz: compressed DEFLATE blocks are not supported
+run: /mnt/paghbox exited with code 1
+
+===== boot 14: zcat errors =====
+pagh:rv64> run /mnt/paghbox zcat /mnt/bad.gz
+zcat: /mnt/bad.gz: bad gzip magic
+run: /mnt/paghbox exited with code 1
+pagh:rv64> run /mnt/paghbox zcat -c /mnt/stored.gz
+usage: zcat [FILE...]
+run: /mnt/paghbox exited with code 2
+pagh:rv64> run /mnt/paghbox zcat /mnt/nope.gz
+zcat: /mnt/nope.gz: No such file or directory
+run: /mnt/paghbox exited with code 1
+

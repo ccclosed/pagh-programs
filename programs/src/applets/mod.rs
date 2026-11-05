@@ -10,9 +10,11 @@ pub mod arch;
 pub mod awk;
 pub mod b2sum;
 pub mod base32;
+pub mod base58;
 pub mod base64;
 pub mod basenc;
 pub mod basename;
+pub mod bin2hex;
 mod bre;
 pub mod cal;
 pub mod cat;
@@ -24,6 +26,7 @@ pub mod cmp;
 mod codec;
 pub mod comm;
 pub mod cp;
+pub mod crc32;
 pub mod cut;
 pub mod date;
 pub mod diff;
@@ -44,6 +47,7 @@ pub mod gzip;
 pub mod grep;
 pub mod gunzip;
 pub mod head;
+pub mod hex2bin;
 pub mod hexdump;
 mod hashsum;
 pub mod hostname;
@@ -73,7 +77,9 @@ pub mod rm;
 pub mod sed;
 pub mod seq;
 pub mod sha1sum;
+pub mod sha224sum;
 pub mod sha256sum;
+pub mod sha384sum;
 pub mod sha512sum;
 pub mod shuf;
 pub mod sleep;
@@ -119,6 +125,7 @@ pub mod timeout;
 pub mod type_applet;
 pub mod watch;
 pub mod xargs;
+pub mod zcat;
 
 /// Every applet in the bundle. `tools/build_repo.py` parses this list to build
 /// the package manifest, so it is the single source of truth for `commands=`.
@@ -230,6 +237,13 @@ pub const NAMES: &[&str] = &[
     "nice",
     "more",
     "nm",
+    "sha224sum",
+    "sha384sum",
+    "crc32",
+    "base58",
+    "hex2bin",
+    "bin2hex",
+    "zcat",
 ];
 
 /// Run an applet by name; `None` means "no such applet".
@@ -291,17 +305,23 @@ pub fn dispatch(name: &str, args: &[String]) -> Option<i32> {
         "paste" => paste::run(args),
         "strings" => strings::run(args),
         "hexdump" => hexdump::run(args),
+        "hex2bin" => hex2bin::run(args),
+        "bin2hex" => bin2hex::run(args),
         "grep" => grep::run(args),
         "rmdir" => rmdir::run(args),
         "tac" => tac::run(args),
         "sum" => sum::run(args),
         "cksum" => cksum::run(args),
+        "crc32" => crc32::run(args),
         "md5sum" => md5sum::run(args),
         "sha1sum" => sha1sum::run(args),
+        "sha224sum" => sha224sum::run(args),
         "sha256sum" => sha256sum::run(args),
+        "sha384sum" => sha384sum::run(args),
         "sha512sum" => sha512sum::run(args),
         "b2sum" => b2sum::run(args),
         "base64" => base64::run(args),
+        "base58" => base58::run(args),
         "base32" => base32::run(args),
         "basenc" => basenc::run(args),
         "diff" => diff::run(args),
@@ -343,6 +363,7 @@ pub fn dispatch(name: &str, args: &[String]) -> Option<i32> {
         "nice" => nice::run(args),
         "more" => more::run(args),
         "nm" => nm::run(args),
+        "zcat" => zcat::run(args),
         _ => return None,
     })
 }
