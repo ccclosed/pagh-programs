@@ -141,7 +141,7 @@ pagh pagh-riscv 0.10.0 0.10.1 riscv64
 run /mnt/paghbox ls -l /mnt
 drwxr-xr-x 4096 dir1/
 -rw-r--r-- 35 hello.txt
--rwxr-xr-x 299096 paghbox
+-rwxr-xr-x 298288 paghbox
 
 run /mnt/paghbox stat /mnt/hello.txt
 /mnt/hello.txt: file, size=35, mode=0o644, ino=23
