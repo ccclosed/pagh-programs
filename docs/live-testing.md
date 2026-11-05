@@ -1,5 +1,157 @@
 # Живые прогоны paghbox
 
+## 1.8.0 (батч 9)
+
+Дата: 2026-11-06. Ядро: `/home/oleg/pagh-riscv/target/riscv64gc-unknown-none-elf/debug/pagh`
+(main 0.16.1; `run /mnt/paghbox uname -a` в QEMU печатает
+`pagh pagh-riscv 0.10.0 0.16.1 riscv64`). QEMU `qemu-system-riscv64` 10.2.2,
+машина `virt`, 256 MiB, serial на Unix-сокете, `-bios default`, modern virtio
+(`-global virtio-mmio.force-legacy=false`). Диск: 64 MiB ext2, создан на хосте
+`mke2fs -q -t ext2 -F -b 4096 -d rootfs disk.img 64M`; в корне — `paghbox`
+1.8.0 и фикстуры: `empty.txt`/`abc.txt`/`fox.txt`, `hello.txt`, `zeros.bin`,
+`notelf.txt` (64 байта, без ELF-magic), синтетический `symbols.elf` с
+`.symtab`/`.dynsym`/`.shstrtab`, base85-векторы `b85hello.txt`,
+`b85adobe.txt`, `b85bad.txt`, check-файлы `sums.sha3` и `sums.sha3.bad`.
+
+Драйвер — [`tools/live_test_180.py`](../tools/live_test_180.py): **13 загрузок
+по 2–3 команды**, после каждой проверялись вывод и
+`run: /mnt/paghbox exited with code N`. Итог: **36 PASS, 0 FAIL**; все 6 новых
+applet'ов проверены функционально. SHA3-256 сверен с векторами FIPS 202
+(включая `abc`), base85 — с `base64.a85encode` хоста в обе стороны, вывод
+`readelf` — с синтетическим ELF, UUID — регулярным выражением
+`8-4-4-4-12` с версией 4 и вариантом `[89ab]`.
+
+Сырой транскрипт: [`live-1.8.0-transcript.txt`](live-1.8.0-transcript.txt).
+
+### Итог 1.8.0
+
+* `sha3sum` — SHA3-256 (Keccak-f[1600], rate 136, suffix `0x06`): пустой файл
+  → `a7ff…434a`, `abc` → `3a98…1532`, `fox` → `6907…fc04`; `-b` даёт
+  `hex *name`; `-c` — `OK`, неверная сумма — `FAILED` + exit 1, `--status`
+  подавляет вывод; неизвестная опция — exit 2. Ядро хэша проверено отдельно
+  на границах rate (135/136/137/272/273 байта) против Python `hashlib`.
+* `calc` — `2+3*4` → `14`, `(2+3)*4` → `20`, `-5+2` → `-3`; два выражения
+  дают две строки, `-e 10%3` → `1`; `1/0` и `7%0` — `division by zero`,
+  exit 1; `2+` — `syntax error`, exit 2.
+* `base85` — `hello\n` → `BOu!rD[H`, четыре нулевых байта → `z`,
+  `-a abc` → `<~@:E^~>` (режим ASCII85/Adobe); decode обоих видов даёт
+  `hello`, `<~v~>` → `invalid input`, exit 1.
+* `readelf` — заголовок синтетического ELF64 RISC-V: `EXEC (2)`,
+  `RISC-V (243)`, entry `0x0`, shoff 64, shnum 8; `-S` печатает 8 секций
+  (`.text`/`.data`/`.dynsym`/`.dynstr`/`.symtab`/`.strtab`/`.shstrtab`);
+  `-s` — те же три строки, что `nm` (`d counter`, `T main`, `U puts`);
+  `-l` — `Program headers: none`; не-ELF — exit 1, неизвестная опция и
+  отсутствие операнда — exit 2.
+* `uuidgen` — один UUID, `-n 3` — три строки; все значения имеют версию 4
+  и вариант RFC 4122; `-n x` — exit 2. Seed — `clock_gettime(1)` + pid,
+  поэтому значения разные от загрузки к загрузке, но не CSPRNG.
+* `paghfetch` — `sysname: pagh`, `nodename: pagh-riscv`, `release: 0.10.0`,
+  `machine: riscv64`, `uptime: 0s`, `nproc: 1`, `pwd: /mnt`; рамка рисуется
+  из реального `sysname`; лишний операнд — exit 2.
+
+### PASS-строки 1.8.0
+
+```text
+PASS sha3 empty: run /mnt/paghbox sha3sum /mnt/empty.txt
+PASS sha3 abc: run /mnt/paghbox sha3sum /mnt/abc.txt
+PASS sha3 fox: run /mnt/paghbox sha3sum /mnt/fox.txt
+PASS sha3 -b: run /mnt/paghbox sha3sum -b /mnt/abc.txt
+PASS sha3 check: run /mnt/paghbox sha3sum -c /mnt/sums.sha3
+PASS sha3 bad check: run /mnt/paghbox sha3sum -c /mnt/sums.sha3.bad
+PASS sha3 status ok: run /mnt/paghbox sha3sum --status -c /mnt/sums.sha3
+PASS sha3 status bad: run /mnt/paghbox sha3sum --status -c /mnt/sums.sha3.bad
+PASS sha3 bad option: run /mnt/paghbox sha3sum -z
+PASS calc precedence: run /mnt/paghbox calc 2+3*4
+PASS calc parentheses: run /mnt/paghbox calc (2+3)*4
+PASS calc unary minus: run /mnt/paghbox calc -5+2
+PASS calc divide by zero: run /mnt/paghbox calc 1/0
+PASS calc syntax: run /mnt/paghbox calc 2+
+PASS calc modulo zero: run /mnt/paghbox calc 7%0
+PASS calc two expressions: run /mnt/paghbox calc 1+1 2*3
+PASS calc eval: run /mnt/paghbox calc -e 10%3
+PASS base85 hello: run /mnt/paghbox base85 /mnt/hello.txt
+PASS base85 zero group: run /mnt/paghbox base85 /mnt/zeros.bin
+PASS base85 adobe: run /mnt/paghbox base85 -a /mnt/abc.txt
+PASS base85 decode hello: run /mnt/paghbox base85 -d /mnt/b85hello.txt
+PASS base85 decode adobe: run /mnt/paghbox base85 -d /mnt/b85adobe.txt
+PASS base85 invalid: run /mnt/paghbox base85 -d /mnt/b85bad.txt
+PASS readelf header: run /mnt/paghbox readelf /mnt/symbols.elf
+PASS readelf not elf: run /mnt/paghbox readelf -h /mnt/notelf.txt
+PASS readelf no operand: run /mnt/paghbox readelf
+PASS readelf sections: run /mnt/paghbox readelf -S /mnt/symbols.elf
+PASS readelf symbols: run /mnt/paghbox readelf -s /mnt/symbols.elf
+PASS readelf program headers: run /mnt/paghbox readelf -l /mnt/symbols.elf
+PASS readelf bad section file: run /mnt/paghbox readelf -S /mnt/notelf.txt
+PASS readelf bad option: run /mnt/paghbox readelf -z /mnt/symbols.elf
+PASS uuidgen default: run /mnt/paghbox uuidgen
+PASS uuidgen count: run /mnt/paghbox uuidgen -n 3
+PASS uuidgen bad count: run /mnt/paghbox uuidgen -n x
+PASS paghfetch: run /mnt/paghbox paghfetch
+PASS paghfetch usage: run /mnt/paghbox paghfetch x
+```
+
+### Показательные выводы 1.8.0
+
+```text
+run /mnt/paghbox sha3sum /mnt/abc.txt
+3a985da74fe225b2045c172d6bd390bd855f086e3e9d525b46bfe24511431532  /mnt/abc.txt
+
+run /mnt/paghbox calc (2+3)*4
+20
+
+run /mnt/paghbox base85 /mnt/hello.txt
+BOu!rD[H
+
+run /mnt/paghbox readelf /mnt/symbols.elf
+ELF header:
+  type:      EXEC (2)
+  machine:   RISC-V (243)
+  entry:     0x0000000000000000
+  phoff:     0
+  shoff:     64
+  flags:     0x0
+  ehsize:    64
+  phentsize: 0
+  phnum:     0
+  shentsize: 64
+  shnum:     8
+
+run /mnt/paghbox uuidgen
+38046507-5739-4eca-83a8-42356c0092cc
+
+run /mnt/paghbox paghfetch
+      +------+   paghfetch
+      | pagh |   sysname:   pagh
+      +------+   nodename:  pagh-riscv
+                 release:   0.10.0
+                 machine:   riscv64
+                 uptime:    0s
+                 nproc:     1
+                 pwd:       /mnt
+```
+
+### Чем проверка 1.8.0 ограничена
+
+* **Нет пайпов и редиректов.** Round-trip `base85` проверен не конвейером, а
+  сверкой с `base64.a85encode` хоста в обе стороны: guest-энкодер должен
+  выдать ровно host-строку, guest-декодер — вернуть исходные байты.
+* **Короткие очереди ввода.** Serial-драйвер ядра принимает ограниченное
+  число байт, пока гость печатает; три команды `readelf` с длинным выводом
+  подряд приводили к таймауту `run.py` на `sendall`. Поэтому `readelf`
+  разбит на три загрузки по 2–3 команды с коротким выводом (это ограничение
+  драйвера/консоли, не applet'а).
+* **`readelf`** — только ELF64 little-endian; `-S`/`-s`/`-l` требуют таблицу
+  секций; DWARF не читается, `addr2line` в наборе нет. Вывод — компактное
+  подмножество GNU, а не его формат.
+* **`uuidgen`** — не источник энтропии: seed из `clock_gettime(1)` и pid,
+  уникальность не гарантирована. Проверены только форма, версия/вариант и
+  количество, а не непредсказуемость.
+* **`sha3sum`** — только SHA3-256; SHA3-224/384/512 и SHAKE не реализованы.
+* **`calc`** — только `i64`; шелл ядра не понимает кавычки, поэтому
+  выражения передаются одним словом без пробелов.
+* **`paghfetch`** показывает `release` из uname (0.10.0), а не версию ядра
+  0.16.1; distro/CPU/RAM не выдумываются, `nproc` всегда 1.
+
 ## 1.7.0 (батч 8)
 
 Дата: 2026-11-06. Ядро: `/home/oleg/pagh-riscv/target/riscv64gc-unknown-none-elf/debug/pagh`

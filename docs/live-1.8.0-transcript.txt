@@ -1,0 +1,168 @@
+# paghbox 1.8.0 live transcript (13 boots)
+
+===== boot 1: sha3 known vectors =====
+pagh:rv64> run /mnt/paghbox sha3sum /mnt/empty.txt
+a7ffc6f8bf1ed76651c14756a061d662f580ff4de43b49fa82d80a4b80f8434a  /mnt/empty.txt
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox sha3sum /mnt/abc.txt
+3a985da74fe225b2045c172d6bd390bd855f086e3e9d525b46bfe24511431532  /mnt/abc.txt
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox sha3sum /mnt/fox.txt
+69070dda01975c8c120c3aada1b282394e7f032fa9cf32f4cb2259a0897dfc04  /mnt/fox.txt
+run: /mnt/paghbox exited with code 0
+
+===== boot 2: sha3 options =====
+pagh:rv64> run /mnt/paghbox sha3sum -b /mnt/abc.txt
+3a985da74fe225b2045c172d6bd390bd855f086e3e9d525b46bfe24511431532 */mnt/abc.txt
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox sha3sum -c /mnt/sums.sha3
+/mnt/abc.txt: OK
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox sha3sum -c /mnt/sums.sha3.bad
+/mnt/abc.txt: FAILED
+sha3sum: WARNING: 1 computed checksum(s) did NOT match
+run: /mnt/paghbox exited with code 1
+
+===== boot 3: sha3 status and usage =====
+pagh:rv64> run /mnt/paghbox sha3sum --status -c /mnt/sums.sha3
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox sha3sum --status -c /mnt/sums.sha3.bad
+run: /mnt/paghbox exited with code 1
+pagh:rv64> run /mnt/paghbox sha3sum -z
+sha3sum: invalid option -- 'z'
+usage: sha3sum [-b] [-c] [--quiet] [--status] [FILE...]
+run: /mnt/paghbox exited with code 2
+
+===== boot 4: calc arithmetic =====
+pagh:rv64> run /mnt/paghbox calc 2+3*4
+14
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox calc (2+3)*4
+20
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox calc -5+2
+-3
+run: /mnt/paghbox exited with code 0
+
+===== boot 5: calc errors =====
+pagh:rv64> run /mnt/paghbox calc 1/0
+calc: division by zero
+run: /mnt/paghbox exited with code 1
+pagh:rv64> run /mnt/paghbox calc 2+
+calc: syntax error
+run: /mnt/paghbox exited with code 2
+pagh:rv64> run /mnt/paghbox calc 7%0
+calc: division by zero
+run: /mnt/paghbox exited with code 1
+
+===== boot 6: calc multiple and -e =====
+pagh:rv64> run /mnt/paghbox calc 1+1 2*3
+2
+6
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox calc -e 10%3
+1
+run: /mnt/paghbox exited with code 0
+
+===== boot 7: base85 encode =====
+pagh:rv64> run /mnt/paghbox base85 /mnt/hello.txt
+BOu!rD[H
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox base85 /mnt/zeros.bin
+z
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox base85 -a /mnt/abc.txt
+<~@:E^~>
+run: /mnt/paghbox exited with code 0
+
+===== boot 8: base85 decode =====
+pagh:rv64> run /mnt/paghbox base85 -d /mnt/b85hello.txt
+hello
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox base85 -d /mnt/b85adobe.txt
+hello
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox base85 -d /mnt/b85bad.txt
+base85: invalid input
+run: /mnt/paghbox exited with code 1
+
+===== boot 9: readelf header =====
+pagh:rv64> run /mnt/paghbox readelf /mnt/symbols.elf
+ELF header:
+  type:      EXEC (2)
+  machine:   RISC-V (243)
+  entry:     0x0000000000000000
+  phoff:     0
+  shoff:     64
+  flags:     0x0
+  ehsize:    64
+  phentsize: 0
+  phnum:     0
+  shentsize: 64
+  shnum:     8
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox readelf -h /mnt/notelf.txt
+readelf: /mnt/notelf.txt: not an ELF file
+run: /mnt/paghbox exited with code 1
+pagh:rv64> run /mnt/paghbox readelf
+usage: readelf [-h] [-S] [-s] [-l] FILE
+run: /mnt/paghbox exited with code 2
+
+===== boot 10: readelf sections and symbols =====
+pagh:rv64> run /mnt/paghbox readelf -S /mnt/symbols.elf
+Sections:
+  [ 0]                      NULL             0x0000000000000000 0x00000000 0x000000
+  [ 1] .text                PROGBITS         0x0000000000000000 0x00000000 0x000000
+  [ 2] .data                PROGBITS         0x0000000000000000 0x00000000 0x000000
+  [ 3] .dynsym              DYNSYM           0x0000000000000000 0x00000240 0x000030
+  [ 4] .dynstr              STRTAB           0x0000000000000000 0x00000270 0x000009
+  [ 5] .symtab              SYMTAB           0x0000000000000000 0x00000279 0x000060
+  [ 6] .strtab              STRTAB           0x0000000000000000 0x000002d9 0x000013
+  [ 7] .shstrtab            STRTAB           0x0000000000000000 0x000002ec 0x000037
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox readelf -s /mnt/symbols.elf
+Symbols:
+0000000000000040 d counter
+0000000000001234 T main
+0000000000000000 U puts
+run: /mnt/paghbox exited with code 0
+
+===== boot 11: readelf program headers and errors =====
+pagh:rv64> run /mnt/paghbox readelf -l /mnt/symbols.elf
+Program headers: none
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox readelf -S /mnt/notelf.txt
+readelf: /mnt/notelf.txt: not an ELF file
+run: /mnt/paghbox exited with code 1
+pagh:rv64> run /mnt/paghbox readelf -z /mnt/symbols.elf
+usage: readelf [-h] [-S] [-s] [-l] FILE
+run: /mnt/paghbox exited with code 2
+
+===== boot 12: uuidgen =====
+pagh:rv64> run /mnt/paghbox uuidgen
+38046507-5739-4eca-83a8-42356c0092cc
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox uuidgen -n 3
+846c33f8-f58f-4966-9f3a-0fd76998b91f
+0d5d94cf-9c4b-47db-b8b6-9b03e7901581
+bcca0a45-ca1c-45f9-977f-104d62af6cb1
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox uuidgen -n x
+uuidgen: invalid count: 'x'
+run: /mnt/paghbox exited with code 2
+
+===== boot 13: paghfetch =====
+pagh:rv64> run /mnt/paghbox paghfetch
+      +------+   paghfetch
+      | pagh |   sysname:   pagh
+      +------+   nodename:  pagh-riscv
+                 release:   0.10.0
+                 machine:   riscv64
+                 uptime:    0s
+                 nproc:     1
+                 pwd:       /mnt
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox paghfetch x
+usage: paghfetch
+run: /mnt/paghbox exited with code 2
+

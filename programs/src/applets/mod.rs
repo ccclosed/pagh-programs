@@ -12,11 +12,13 @@ pub mod b2sum;
 pub mod base32;
 pub mod base58;
 pub mod base64;
+pub mod base85;
 pub mod basenc;
 pub mod basename;
 pub mod bin2hex;
 mod bre;
 pub mod cal;
+pub mod calc;
 pub mod cat;
 pub mod chmod;
 pub mod csplit;
@@ -32,6 +34,7 @@ pub mod date;
 pub mod diff;
 mod digest;
 pub mod dirname;
+mod elf;
 pub mod du;
 pub mod echo;
 pub mod env;
@@ -65,10 +68,12 @@ pub mod nl;
 pub mod nproc;
 pub mod numfmt;
 pub mod od;
+pub mod paghfetch;
 pub mod paste;
 pub mod patch;
 pub mod printf;
 pub mod pwd;
+pub mod readelf;
 pub mod readlink;
 pub mod realpath;
 pub mod rev;
@@ -79,6 +84,7 @@ pub mod seq;
 pub mod sha1sum;
 pub mod sha224sum;
 pub mod sha256sum;
+pub mod sha3sum;
 pub mod sha384sum;
 pub mod sha512sum;
 pub mod shuf;
@@ -103,6 +109,7 @@ pub mod unexpand;
 pub mod untar;
 pub mod uniq;
 pub mod uptime;
+pub mod uuidgen;
 mod uu;
 pub mod uudecode;
 pub mod uuencode;
@@ -244,6 +251,12 @@ pub const NAMES: &[&str] = &[
     "hex2bin",
     "bin2hex",
     "zcat",
+    "sha3sum",
+    "calc",
+    "base85",
+    "readelf",
+    "uuidgen",
+    "paghfetch",
 ];
 
 /// Run an applet by name; `None` means "no such applet".
@@ -364,6 +377,12 @@ pub fn dispatch(name: &str, args: &[String]) -> Option<i32> {
         "more" => more::run(args),
         "nm" => nm::run(args),
         "zcat" => zcat::run(args),
+        "sha3sum" => sha3sum::run(args),
+        "calc" => calc::run(args),
+        "base85" => base85::run(args),
+        "readelf" => readelf::run(args),
+        "uuidgen" => uuidgen::run(args),
+        "paghfetch" => paghfetch::run(args),
         _ => return None,
     })
 }

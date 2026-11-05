@@ -1,5 +1,5 @@
 //! Hash primitives shared by `md5sum`, `sha1sum`, `sha224sum`, `sha256sum`,
-//! `sha384sum`, `sha512sum` and `b2sum`.
+//! `sha3sum`, `sha384sum`, `sha512sum` and `b2sum`.
 //!
 //! The module is deliberately free of `libpagh` types: the applets read a file
 //! and call [`hash`], and the same file can be compiled by a host `rustc` for
@@ -15,13 +15,15 @@
 //!   SHA-256 with the SHA-224 IV and a 28-byte truncation; SHA-384 is SHA-512
 //!   with the SHA-384 IV and a 48-byte truncation. The compression function is
 //!   shared, as the standard defines it;
+//! * SHA3-256 (FIPS 202): the Keccak-f[1600] permutation, a 136-byte rate and
+//!   the `0x06` domain-separation suffix;
 //! * BLAKE2b-512, unkeyed (RFC 7693).
 //!
 //! Each is a one-shot implementation: the caller supplies the whole message.
 //! That is the same memory policy as `sort`, `diff` and the other whole-file
 //! applets in this bundle.
 
-/// The digest algorithms exposed by the seven `*sum` applets.
+/// The digest algorithms exposed by the eight `*sum` applets.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Algorithm {
     Md5,
@@ -30,6 +32,7 @@ pub enum Algorithm {
     Sha256,
     Sha384,
     Sha512,
+    Sha3_256,
     Blake2b,
 }
 
@@ -43,6 +46,7 @@ impl Algorithm {
             Algorithm::Sha256 => 32,
             Algorithm::Sha384 => 48,
             Algorithm::Sha512 => 64,
+            Algorithm::Sha3_256 => 32,
             Algorithm::Blake2b => 64,
         }
     }
@@ -57,6 +61,7 @@ impl Algorithm {
             Algorithm::Sha256 => "sha256sum",
             Algorithm::Sha384 => "sha384sum",
             Algorithm::Sha512 => "sha512sum",
+            Algorithm::Sha3_256 => "sha3sum",
             Algorithm::Blake2b => "b2sum",
         }
     }
@@ -98,6 +103,11 @@ pub fn hash(algorithm: Algorithm, data: &[u8]) -> ([u8; 64], usize) {
             let digest = sha512(data);
             out[..64].copy_from_slice(&digest);
             (out, 64)
+        }
+        Algorithm::Sha3_256 => {
+            let digest = sha3_256(data);
+            out[..32].copy_from_slice(&digest);
+            (out, 32)
         }
         Algorithm::Blake2b => {
             let digest = blake2b512(data);
@@ -547,6 +557,128 @@ fn sha512_block(state: &mut [u64; 8], block: &[u8; 128]) {
     state[5] = state[5].wrapping_add(f);
     state[6] = state[6].wrapping_add(g);
     state[7] = state[7].wrapping_add(h);
+}
+
+// ─── SHA3-256 ─────────────────────────────────────────────────────────────
+
+/// The 24 Keccak-f[1600] round constants (FIPS 202, §3.2.5).
+const KECCAK_RC: [u64; 24] = [
+    0x0000_0000_0000_0001,
+    0x0000_0000_0000_8082,
+    0x8000_0000_0000_808a,
+    0x8000_0000_8000_8000,
+    0x0000_0000_0000_808b,
+    0x0000_0000_8000_0001,
+    0x8000_0000_8000_8081,
+    0x8000_0000_0000_8009,
+    0x0000_0000_0000_008a,
+    0x0000_0000_0000_0088,
+    0x0000_0000_8000_8009,
+    0x0000_0000_8000_000a,
+    0x0000_0000_8000_808b,
+    0x8000_0000_0000_008b,
+    0x8000_0000_0000_8089,
+    0x8000_0000_0000_8003,
+    0x8000_0000_0000_8002,
+    0x8000_0000_0000_0080,
+    0x0000_0000_0000_800a,
+    0x8000_0000_8000_000a,
+    0x8000_0000_8000_8081,
+    0x8000_0000_0000_8080,
+    0x0000_0000_8000_0001,
+    0x8000_0000_8000_8008,
+];
+
+/// The Rho rotation offsets in Pi-walk order (FIPS 202, §3.2.3).
+const KECCAK_ROTC: [u32; 24] = [
+    1, 3, 6, 10, 15, 21, 28, 36, 45, 55, 2, 14, 27, 41, 56, 8, 25, 43, 62, 18, 39, 61, 20, 44,
+];
+
+/// The Pi-walk lane order (FIPS 202, §3.2.3).
+const KECCAK_PILN: [usize; 24] = [
+    10, 7, 11, 17, 18, 3, 5, 16, 8, 21, 24, 4, 15, 23, 19, 13, 12, 2, 20, 14, 22, 9, 6, 1,
+];
+
+const SHA3_RATE: usize = 136;
+
+/// SHA3-256: Keccak-f[1600] sponge with a 136-byte rate and `0x06` padding.
+fn sha3_256(data: &[u8]) -> [u8; 32] {
+    let mut state = [0u64; 25];
+
+    let full = data.len() / SHA3_RATE * SHA3_RATE;
+    let mut offset = 0usize;
+    while offset < full {
+        let mut block = [0u8; SHA3_RATE];
+        block.copy_from_slice(&data[offset..offset + SHA3_RATE]);
+        keccak_absorb(&mut state, &block);
+        keccak_f1600(&mut state);
+        offset += SHA3_RATE;
+    }
+
+    // 0x06 is the SHA-3 domain suffix (pad10*1 plus the 01 bits); the final
+    // 0x80 lands on the last rate byte and may share it with the suffix.
+    let remainder = data.len() - full;
+    let mut tail = [0u8; SHA3_RATE];
+    tail[..remainder].copy_from_slice(&data[full..]);
+    tail[remainder] = 0x06;
+    tail[SHA3_RATE - 1] |= 0x80;
+    keccak_absorb(&mut state, &tail);
+    keccak_f1600(&mut state);
+
+    let mut out = [0u8; 32];
+    for (index, lane) in state.iter().take(4).enumerate() {
+        out[index * 8..index * 8 + 8].copy_from_slice(&lane.to_le_bytes());
+    }
+    out
+}
+
+fn keccak_absorb(state: &mut [u64; 25], block: &[u8; SHA3_RATE]) {
+    let mut lane = 0usize;
+    while lane * 8 < SHA3_RATE {
+        let mut bytes = [0u8; 8];
+        bytes.copy_from_slice(&block[lane * 8..lane * 8 + 8]);
+        state[lane] ^= u64::from_le_bytes(bytes);
+        lane += 1;
+    }
+}
+
+/// The Keccak-f[1600] permutation, in place (FIPS 202, §3.3).
+fn keccak_f1600(state: &mut [u64; 25]) {
+    for round in 0..24 {
+        // Theta.
+        let mut columns = [0u64; 5];
+        for x in 0..5 {
+            columns[x] =
+                state[x] ^ state[x + 5] ^ state[x + 10] ^ state[x + 15] ^ state[x + 20];
+        }
+        for x in 0..5 {
+            let delta = columns[(x + 4) % 5] ^ columns[(x + 1) % 5].rotate_left(1);
+            for y in 0..5 {
+                state[x + 5 * y] ^= delta;
+            }
+        }
+
+        // Rho and Pi: walk the lanes, rotating each.
+        let mut carried = state[1];
+        for index in 0..24 {
+            let lane = KECCAK_PILN[index];
+            let saved = state[lane];
+            state[lane] = carried.rotate_left(KECCAK_ROTC[index]);
+            carried = saved;
+        }
+
+        // Chi.
+        for y in 0..5 {
+            let mut row = [0u64; 5];
+            row.copy_from_slice(&state[5 * y..5 * y + 5]);
+            for x in 0..5 {
+                state[x + 5 * y] = row[x] ^ ((!row[(x + 1) % 5]) & row[(x + 2) % 5]);
+            }
+        }
+
+        // Iota.
+        state[0] ^= KECCAK_RC[round];
+    }
 }
 
 // ─── BLAKE2b-512 ──────────────────────────────────────────────────────────

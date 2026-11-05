@@ -5,15 +5,22 @@
 `[ ]` запланировано. Ядро — POSIX-подобные CLI-утилиты; «портировать» =
 реализовать семантику под `libpagh` (не тащить GNU/Linux-исходники).
 
-> Статус: 114 из 120 отмечены `[x]` — они собираются в `paghbox` 1.7.0.
-> Батч 8 (7 утилит: sha224sum, sha384sum, crc32, base58, hex2bin, bin2hex,
-> zcat) проверен живым запуском в QEMU на ядре 0.16.1: SHA-224/SHA-384
-> сверены с эталонами, CRC-32 — по контрольному значению `cbf43926`,
+> Статус: 120 из 120 отмечены `[x]` — все собираются в `paghbox` 1.8.0.
+> Батч 9 (6 утилит: sha3sum, calc, base85, readelf, uuidgen, paghfetch)
+> проверен живым запуском в QEMU на ядре 0.16.1: SHA3-256 сверен с
+> векторами FIPS 202, `-b`/`-c`/`--status` — по check-файлам; calc —
+> приоритеты, скобки, унарный минус и коды 1/2; base85 — round-trip в
+> обычном и Adobe-виде; readelf — заголовок/секции/символы на синтетическом
+> ELF64 RISC-V; uuidgen — v4-формат и `-n`; paghfetch — реальные uname,
+> uptime, nproc=1 и PWD. Список — ровно 120 уникальных имён, все 120 входят
+> в `commands=` пакета.
+>
+> Ранее: батч 8 (7 утилит: sha224sum, sha384sum, crc32, base58, hex2bin,
+> bin2hex, zcat) — 42 PASS на 14 загрузках; SHA-224/SHA-384 сверены с
+> эталонами, CRC-32 — по контрольному значению `cbf43926`,
 > base58/hex2bin/bin2hex — round-trip, zcat — на host stored-block `.gz`.
 > `sha224sum`/`sha384sum` переиспользуют существующие SHA-256/SHA-512 с
 > другим IV и усечением; `zcat` — тот же хранимый декодер, что у `gunzip`.
-> Остальные 6 `[ ]` запланированы. Список — ровно 120 уникальных имён, все
-> 114 реализованных входят в `commands=` пакета.
 >
 > Ранее: батч 7 (13 утилит: timeout, watch, xargs, parallel, install, shred,
 > command, type, time, exit, nice, more, nm) — 67 PASS на 23 загрузках, 107
@@ -122,8 +129,8 @@
 - [x] bin2hex — бинарный вход → hex (`-u`, `-w N`), файл/stdin
 - [x] zcat — распаковать stored-block gzip в stdout (`gzip -dc`)
 - [x] kill — сигналы TERM/KILL/INT/USR1/USR2/STOP/CONT/0 и номера
-- [ ] pgrep — поиск pid
-- [ ] pkill — завершение по имени
+- [x] sha3sum — SHA3-256 (Keccak-f[1600], rate 136, pad 0x06), `-b`/`-c`/`--status`, файлы/stdin
+- [x] calc — целочисленные выражения (`+ - * / %`, скобки, унарный минус), аргументы или `-e`; деление на 0 → 1, синтаксис → 2
 - [x] watch — периодический вывод (`-n SEC`, `-t`, `-c N`)
 - [x] xargs — аргументы из файла/stdin (`-a`, `-n`, `-I{}`, `-r`)
 - [x] parallel — последовательный запуск (`-j N` принят, сериализуется)
@@ -145,22 +152,25 @@
 - [x] nm — таблица символов ELF (`-D`, `-u`, `-n`)
 - [x] curl — HTTP/1.0 GET (IPv4, `-o`, `-i`)
 - [x] wget — HTTP/1.0 GET в файл (`-O`)
-- [ ] ping — ICMP (через будущий syscall)
-- [ ] netstat — сетевые сокеты (пока нет)
+- [x] base85 — ASCII85 encode/decode (`-d`, `-a` для `<~ ~>`), файл/stdin, round-trip; ошибка → 1
+- [x] readelf — ELF64 LE: `-h`, `-S`, `-s`, `-l`; ошибка → 1
 - [x] numfmt — SI/IEC (`--to`, `--from`, `--to-unit`, `--suffix`, `--padding`)
 - [x] gzip — gzip-поток с DEFLATE stored blocks (без сжатия), `-d/-c/-k/-f`
 - [x] gunzip — `gzip -d`, отдельное имя
 - [x] tar — ustar: create/list/extract, `-f`, `-C`, `-v`, файлы/каталоги/симлинки
 - [x] untar — `tar -x`
-- [ ] lsblk — блочные устройства (нет syscall)
+- [x] uuidgen — RFC-4122 v4-shaped UUID от xorshift (clock_gettime(1)/pid), `-r`, `-n N`; уникальность не гарантирована
 - [x] cal — месяц/год по григорианскому календарю, `-y`; время — epoch
-- [ ] addr2line — адрес → файл:строка
+- [x] paghfetch — баннер: uname (sysname/nodename/release/machine), uptime, nproc=1, PWD
 - [x] arch — архитектура из uname
 - [x] tree — дерево каталога
 
-> Примечание: список — рабочий каталог, а не обещание одной итерации. 114
-> отмеченных `[x]` реализованы в `programs/src/applets/` и собираются в
-> `paghbox` 1.7.0. Живая проверка ведётся по ядру 0.16.1
+> Примечание: 120 отмеченных `[x]` реализованы в `programs/src/applets/` и
+> собираются в `paghbox` 1.8.0. Живая проверка ведётся по ядру 0.16.1
 > (`run /mnt/paghbox <applet> ...`), см. README и
 > `docs/live-testing.md`. Слот `dns` (DNS-резолв, для которого в ABI нет
-> syscall) отдан `sha512sum`, чтобы список остался ровно из 120 имён.
+> syscall) отдан `sha512sum`, чтобы список остался ровно из 120 имён. Слоты
+> `pgrep`/`pkill`/`ping`/`netstat`/`lsblk`/`addr2line` заменены на
+> `sha3sum`/`calc`/`base85`/`readelf`/`uuidgen`/`paghfetch`: сигналы чужому
+> процессу, ICMP, перечисление блочных устройств и DWARF-адреса в ABI
+> 0.16.1 отсутствуют, а эти шесть утилит полностью реализуемы на нём.

@@ -2,7 +2,7 @@
 
 Репозиторий портов: программы написаны **под нативный API `libpagh`**
 (соседний checkout `../pagh-api`), а не под Linux-совместимый слой. Один
-busybox-style ELF `paghbox` содержит 114 applet'ов; `tools/build_repo.py`
+busybox-style ELF `paghbox` содержит 120 applet'ов; `tools/build_repo.py`
 упаковывает его в `.ppkg` и пишет `repo/index`. Установщик `pkg` в ядре
 pagh-riscv — потребитель этого репозитория: скачивает пакет по HTTP, сверяет
 SHA-256/размер, ставит ELF в `/mnt/bin` и создаёт симлинки на команды.
@@ -10,29 +10,31 @@ SHA-256/размер, ставит ELF в `/mnt/bin` и создаёт симл�
 ## Структура
 
 ```
-catalog.md                 целевые 120 программ и честный статус (114 [x])
+catalog.md                 целевые 120 программ и честный статус (120 [x])
 docs/package-format.md     формат .ppkg и index (контракт с ядром)
 programs/                  crate paghbox: dispatch + applets/
   src/main.rs              argv[0]/`paghbox <applet>` + exit codes
   src/util.rs              EAGAIN-retry, Input, which/spawn/wait, duration
-  src/applets/             114 модулей:
+  src/applets/             120 модулей:
                            echo true false yes pwd basename dirname seq
                            cat wc head tail ls stat uname hostname arch nproc sleep
                            uptime date cal readlink realpath uniq sort nl fold expand
                            unexpand rev cut tr comm paste strings hexdump grep tac
                            cp mv rm mkdir rmdir touch ln truncate chmod find
-                           du tree file printf expr test factor which mktemp
+                           du tree file printf expr calc test factor which mktemp
                            hex2bin bin2hex sum cksum crc32
-                           md5sum sha1sum sha224sum sha256sum sha384sum sha512sum
-                           b2sum base58 base64 base32 basenc
+                           md5sum sha1sum sha224sum sha256sum sha3sum sha384sum
+                           sha512sum b2sum base58 base85 base64 base32 basenc
                            diff cmp patch sed awk shuf numfmt whoami id env
                            tee split csplit join fmt od xxd uuencode uudecode
                            curl wget kill gzip gunzip zcat tar untar
                            timeout watch xargs parallel install shred command
-                           type time exit nice more nm
-                           (+ bre/codec/digest/hashsum/httpc/uu helpers)
+                           type time exit nice more nm readelf
+                           uname-родственные: uuidgen paghfetch
+                           (+ bre/codec/digest/elf/hashsum/httpc/uu helpers)
 tools/build_repo.py        cargo build -> .ppkg -> index, и --check
 tools/live_test_170.py     QEMU live suite 1.7.0 (14 загрузок, 42 проверки)
+tools/live_test_180.py     QEMU live suite 1.8.0 (13 загрузок)
 repo/                      сгенерировано, в git не входит (см. ниже)
 ```
 
@@ -106,7 +108,7 @@ payload по SHA-256/размеру **до** записи и создаёт си
 `16 + manifest_len + payload_len`. `--check` проверяет именно такую трактовку;
 это же зафиксировано в [`docs/package-format.md`](docs/package-format.md).
 
-## Applet'ы (114)
+## Applet'ы (120)
 
 | Команда | Что делает | Коды выхода |
 |---|---|---|
@@ -130,6 +132,7 @@ payload по SHA-256/размеру **до** записи и создаёт си
 | `nproc` | всегда `1` (один hart, одна user-задача) | 0; 2 |
 | `sleep` | секунды, включая `0.5`/`1.5`; `nanosleep`, округление вверх до тика | 0; 1; 2 |
 | `uptime` | `up <sec>s` из `clock_gettime(1)` | 0; 1; 2 |
+| `paghfetch` | баннер из реальных `uname` (sysname/nodename/release/machine), uptime, nproc=1, PWD; без выдуманных данных | 0; 1 (uname); 2 |
 | `date` | `epoch=<sec>.<nsec>` из `clock_gettime(0)`; часового пояса нет | 0; 1; 2 |
 | `cal` | месяц/год, `-y`; григорианская сетка 7 колонок; «сейчас» — epoch | 0; 1 (clock); 2 |
 | `readlink` | цель симлинка как есть; не-симлинк — ошибка | 0; 1; 2 |
@@ -162,6 +165,7 @@ payload по SHA-256/размеру **до** записи и создаёт си
 | `file` | пусто/ELF/каталог/симлинк/текст-vs-бинарный по содержимому | 0; 1; 2 |
 | `printf` | `%s %d %i %x %X %o %c %%`, escapes; аргументы циклятся | 0; 1; 2 |
 | `expr` | целочисленная арифметика, сравнения, `!`; 0/1/2 | 0; 1; 2 |
+| `calc` | целочисленные `+ - * / %`, скобки, унарный минус; операнды или `-e EXPR`; i64 checked | 0; 1 (деление на 0/overflow); 2 (синтаксис) |
 | `test` / `[` | `-e -f -d -s -L -r -w -x -z -n`, `= != -eq…` | 0/1/2 |
 | `factor` | trial division u64; `N: p q …` | 0; 1; 2 |
 | `which` | `/mnt/bin/<name>`, затем `<PWD>/<name>`; PATH не задан | 0; 1; 2 |
@@ -175,11 +179,13 @@ payload по SHA-256/размеру **до** записи и создаёт си
 | `sha1sum` | SHA-1, тот же интерфейс и `-c` | 0; 1; 2 |
 | `sha224sum` | SHA-224 (SHA-256 с другим IV, 28 байт), тот же интерфейс и `-c` | 0; 1; 2 |
 | `sha256sum` | SHA-256, тот же интерфейс и `-c` | 0; 1; 2 |
+| `sha3sum` | SHA3-256 (Keccak-f[1600], rate 136, pad `0x06`), `-b`, `-c`, `--status`; файлы/stdin | 0; 1; 2 |
 | `sha384sum` | SHA-384 (SHA-512 с другим IV, 48 байт), тот же интерфейс и `-c` | 0; 1; 2 |
 | `sha512sum` | SHA-512, тот же интерфейс и `-c` | 0; 1; 2 |
 | `b2sum` | BLAKE2b-512 (unkeyed), тот же интерфейс и `-c` | 0; 1; 2 |
 | `base64` | encode/decode (`-d`), `-w N` (76; 0 — без переноса) | 0; 1 (ввод); 2 |
 | `base58` | Bitcoin base58 encode/decode (`-d`); ведущие нули → `1`; whitespace при decode | 0; 1 (ввод); 2 |
+| `base85` | ASCII85 encode/decode (`-d`), `-a` — обернуть в `<~ ~>`; decode принимает оба вида и whitespace | 0; 1 (ввод); 2 |
 | `base32` | RFC 4648 base32, те же `-d`/`-w N` | 0; 1 (ввод); 2 |
 | `basenc` | base16/base32/base32hex/base64/base64url; `-d`, `-w N`, `-i` | 0; 1 (ввод); 2 |
 | `diff` | normal-формат `NaM`/`NdM`/`NcM`, `<`/`>`/`---`; LCS (Hirschberg) | 0 одинаковы; 1 различия; 2 ошибка |
@@ -224,6 +230,8 @@ payload по SHA-256/размеру **до** записи и создаёт си
 | `nice` | `-n N` принят; приоритетов в ABI нет — no-op; запускает команду | код ребёнка; 127; 2 |
 | `more` | `-n LINES` (24), `-d`; `--More--` после каждого чанка, без интерактива/TTY | 0; 1; 2 |
 | `nm` | ELF64 LE: `.symtab`/`.dynsym`, `-D`, `-u`, `-n`; `value T name`, без demangle | 0; 1 (ELF/файл); 2 |
+| `readelf` | ELF64 LE: `-h` (по умолчанию), `-S` секции, `-s` символы (общий парсер с `nm`), `-l` program headers | 0; 1 (ELF/файл); 2 |
+| `uuidgen` | RFC-4122 v4-shaped из xorshift64* (seed: `clock_gettime(1)` + pid), `-r`, `-n N`; не CSPRNG | 0; 1 (запись); 2 |
 
 
 `cat/wc/head/tail` и новые файловые фильтры читают через `libpagh`: `read` на
@@ -252,23 +260,25 @@ QEMU; живым запуском проверен его разбор аргу�
 
 Сборка: `cargo build --release --target riscv64gc-unknown-none-elf` даёт
 статический RV64 ELF; `python3 tools/build_repo.py` пишет
-`repo/pkg/paghbox-1.7.0.ppkg`, а `python3 tools/build_repo.py --check` зелёный.
-Пакет `paghbox 1.7.0` содержит 114 команд; его размер и SHA-256 приведены в
+`repo/pkg/paghbox-1.8.0.ppkg`, а `python3 tools/build_repo.py --check` зелёный.
+Пакет `paghbox 1.8.0` содержит 120 команд; его размер и SHA-256 приведены в
 разделе [`repo/`](#repo-и-воспроизводимость) ниже. `MAX_COMMANDS = 160` в
-установщике 0.16.1 с запасом покрывает 114.
+установщике 0.16.1 с запасом покрывает 120.
 
 Живой прогон сделан на **ядре 0.16.1** (`/home/oleg/pagh-riscv/target/.../debug/pagh`,
 native ABI + pkg installer), QEMU `virt`, 256 MiB, диск 64 MiB ext2
 (`mke2fs -q -t ext2 -F -b 4096 -d rootfs disk.img 64M`). Драйвер —
-[`tools/live_test_170.py`](tools/live_test_170.py): он собирает образ, копирует
-`paghbox`, `/mnt/bin`-симлинки и фикстуры (хэш-векторы, CRC-32, base58,
-hex, host stored-block `.gz`) и делает **14 загрузок по 3 команды**
-(короткие группы обязательны: serial-драйвер теряет длинные строки), проверяя
-вывод и `run: ... exited with code N` после каждой. Результат: **42 PASS,
-0 FAIL**, все 7 новых applet'ов проверены функционально; контейнерная
-совместимость gzip/tar из батча 6 остаётся в истории `docs/live-testing.md`.
+[`tools/live_test_180.py`](tools/live_test_180.py): он собирает образ, копирует
+`paghbox` и фикстуры (SHA3-векторы, base85-строки, синтетический ELF) и делает
+**13 загрузок по 2–3 команды** (короткие группы обязательны: serial-драйвер
+теряет длинные строки вывода), проверяя вывод, коды и, для UUID, регулярное
+выражение. Результат: **36 PASS, 0 FAIL**, все 6 новых applet'ов проверены
+функционально; история батчей 8 и 7 остаётся в `docs/live-testing.md`.
 
 Сырые транскрипты:
+[`docs/live-1.8.0-transcript.txt`](docs/live-1.8.0-transcript.txt) (13 загрузок),
+[`docs/live-1.8.0-pkg-install.txt`](docs/live-1.8.0-pkg-install.txt)
+(`pkg install` 1.8.0, 120 симлинков); история 1.7.0:
 [`docs/live-1.7.0-transcript.txt`](docs/live-1.7.0-transcript.txt) (14 загрузок);
 история 1.6.0:
 [`docs/live-1.6.0-transcript.txt`](docs/live-1.6.0-transcript.txt) (23 загрузки),
@@ -289,6 +299,12 @@ PASS-строки и таблица: [`docs/live-testing.md`](docs/live-testing.
 | `base58` | `hello\n` → `tzCkV5DK`; `00 01` → `12`; decode `hello`/`abc`; `0OIl` → `invalid input` (1); лишний операнд → 2 |
 | `hex2bin`/`bin2hex` | `61 62\n63\t0a` → `decoded.bin` → `6162630a`; `-u` → `68656C6C6F0A`; `-w 4` → `6865`/`6c6c`/`6f0a`; неверный hex → 1, плохая ширина → 2 |
 | `zcat` | `stored.gz` → `zcat stored payload`; concatenated members; `compressed.gz` → `compressed DEFLATE blocks are not supported` (1); `bad.gz` → `bad gzip magic` (1); `-c` → 2 |
+| `sha3sum` | FIPS 202 SHA3-256: `empty` → `a7ff…434a`, `abc` → `3a98…1532`, `fox` → `6907…fc04`; `-b` → `hex *name`; `-c` `OK`/`FAILED`, `--status` без вывода, `-z` → 2; границы rate 135/136/137/272/273 сверены с `hashlib` |
+| `calc` | `2+3*4` → `14`, `(2+3)*4` → `20`, `-5+2` → `-3`; два выражения — две строки, `-e 10%3` → `1`; `1/0`, `7%0` → 1; `2+` → 2 |
+| `base85` | `hello\n` → `BOu!rD[H`, `00 00 00 00` → `z`; `-a abc` → `<~@:E^~>`; decode обоих видов → `hello`; `<~v~>` → `invalid input` (1) |
+| `readelf` | синтетический ELF64 RISC-V: `-h` (EXEC/RISC-V/entry/shoff/shnum), `-S` 8 секций, `-s` те же 3 строки, что `nm`; `-l` → `Program headers: none`; не-ELF → 1, опции/операнды → 2 |
+| `uuidgen` | UUID версии 4 и варианта `[89ab]`; `-n 3` — три строки, `-n x` → 2; seed `clock_gettime(1)`+pid (не CSPRNG) |
+| `paghfetch` | реальные `sysname`/`nodename`/`release`/`machine`/`uptime`/`nproc=1`/PWD, рамка из `sysname`; лишний операнд → 2 |
 | `basenc` | base64 `aGVsbG8K`, base32 `NBSWY3DPBI======`, base32hex `D1IMOR3F18======`, base16 `68656C6C6F0A`; decode всех пяти; `-w 4` → `aGVs`/`bG8K`; base64url с `-`/`_` |
 | `gzip`/`gunzip` | `gzip -k` → `gunzip -f` → исходный текст; host stored-block `.gz` прочитан; guest `.gz` распакован Python `gzip.decompress` в `hello\n` |
 | `tar`/`untar` | create/list/extract `tree/` (5 записей), `cat tree/a.txt` → `tree file`, symlink → `a.txt`; host ustar с prefix-именем >100 символов прочитан; guest tar проверен Python `tarfile` (включая long name) |
@@ -424,8 +440,30 @@ ext2 с `repo/` на хосте: `pkg: installed paghbox 1.6.0`, затем
 * **`shred`:** best-effort, не secure erase: ABI без `fsync`, ext2-кэш и
   переназначение секторов не контролируются; паттерн детерминированный
   xorshift в printable ASCII, `-s` задаёт число байт (не усекает длинный
-  файл), `-u` удаляет после прохода. **`nm`:** только ELF64 little-endian,
-  `.symtab` предпочитается `.dynsym`, без demangle/`-S`/`-l`; битый ELF — 1.
+  файл), `-u` удаляет после прохода.
+* **`nm`/`readelf`:** только ELF64 little-endian; `nm` предпочитает
+  `.symtab`, без demangle/`-S`/`-l`; битый ELF — 1. `readelf` — компактное
+  подмножество GNU-вывода, `-S`/`-s`/`-l` требуют таблицу секций, DWARF не
+  читается (поэтому `addr2line` в наборе нет). `-s` и `nm` используют один
+  парсер `elf.rs`, поэтому расхождений в символах и буквах типов нет.
+* **`sha3sum`:** один SHA3-256; SHA3-224/384/512, SHAKE и cSHAKE не
+  реализованы. Файл читается целиком (та же политика памяти, что у
+  `sha256sum`), режимы `-b`/`-c`/`--status` общие с остальными `*sum`.
+* **`calc`:** только `i64` и целые литералы — без плавающей точки, переменных
+  и функций. Деление/остаток на ноль и overflow — exit 1, синтаксис — 2;
+  вложенность скобок ограничена 64 уровнями. Каждый операнд — отдельное
+  выражение (`-e` — то же самое), поэтому `calc 2 + 2` не склеивается.
+* **`base85`:** без переносов строк; `-a` добавляет Adobe-делимитеры,
+  decode принимает и их, и «голый» текст. Это не `btoa`-совместимый
+  checksum-формат: кодируются/декодируются только данные.
+* **`uuidgen`:** **не** источник энтропии. xorshift64* засевается
+  `clock_gettime(1)` и pid, поэтому UUID детерминированы для одного seed,
+  два процесса в одном тике могут совпасть; криптостойкость и уникальность
+  не гарантированы (в ABI нет `getrandom`).
+* **`paghfetch`:** показывает только то, что есть в ABI: `uname`
+  (sysname/nodename/release/machine), uptime, `nproc=1` и PWD. Названия
+  дистрибутива, модели CPU, объёма RAM и числа пакетов не выдумываются;
+  `release` — поле uname (0.10.0), а не версия сборки ядра (0.16.1).
 * **`exit`** вызывает `sys::exit`, то есть завершает весь `paghbox`; это
   осмысленно только как entry point. `command`/`type` не знают builtins —
   только файлы в фиксированном поиске.

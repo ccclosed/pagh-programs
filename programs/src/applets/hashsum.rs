@@ -1,5 +1,5 @@
 //! Shared command-line front end for `md5sum`, `sha1sum`, `sha224sum`,
-//! `sha256sum`, `sha384sum`, `sha512sum` and `b2sum`.
+//! `sha256sum`, `sha3sum`, `sha384sum`, `sha512sum` and `b2sum`.
 //!
 //! Interfaces match the coreutils `*sum` family closely enough for real use:
 //!
