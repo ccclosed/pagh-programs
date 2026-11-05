@@ -1,0 +1,223 @@
+# paghbox 1.3.0 live transcript (17 boots)
+
+===== boot 1: kernel version =====
+pagh:rv64> run /mnt/paghbox uname -a
+pagh pagh-riscv 0.10.0 0.16.1 riscv64
+run: /mnt/paghbox exited with code 0
+
+===== boot 2: rmdir =====
+pagh:rv64> run /mnt/paghbox rmdir -p p1/p2/p3
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox rmdir /mnt/d_empty /mnt/d_nonempty
+rmdir: /mnt/d_nonempty: Directory not empty
+run: /mnt/paghbox exited with code 1
+
+===== boot 3: tac sum cksum =====
+pagh:rv64> run /mnt/paghbox tac /mnt/lines.txt
+three
+two
+one
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox sum /mnt/hello.txt
+36979     1 /mnt/hello.txt
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox sum -s /mnt/hello.txt
+542 1 /mnt/hello.txt
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox cksum /mnt/hello.txt
+3015617425 6 /mnt/hello.txt
+run: /mnt/paghbox exited with code 0
+
+===== boot 4: base64/base32 encode =====
+pagh:rv64> run /mnt/paghbox base64 /mnt/hello.txt
+aGVsbG8K
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox base64 -w 4 /mnt/hello.txt
+aGVs
+bG8K
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox base32 /mnt/hello.txt
+NBSWY3DPBI======
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox base32 -w 8 /mnt/base.txt
+NBSWY3DP
+EB3W64TM
+MQFA====
+run: /mnt/paghbox exited with code 0
+
+===== boot 5: decode + diff =====
+pagh:rv64> run /mnt/paghbox base64 -d /mnt/hello.b64
+hello
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox base32 -d /mnt/hello.b32
+hello
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox diff /mnt/same1.txt /mnt/same2.txt
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox diff /mnt/diff1.txt /mnt/diff2.txt
+2c2
+< b
+---
+> B
+4c4
+< d
+---
+> e
+run: /mnt/paghbox exited with code 1
+
+===== boot 6: cmp report =====
+pagh:rv64> run /mnt/paghbox cmp /mnt/cmp1.txt /mnt/cmp2.txt
+/mnt/cmp1.txt /mnt/cmp2.txt differ: byte 5, line 2, offset 0x4
+run: /mnt/paghbox exited with code 1
+pagh:rv64> run /mnt/paghbox cmp -l /mnt/cmp1.txt /mnt/cmp2.txt
+5 144 170
+run: /mnt/paghbox exited with code 1
+
+===== boot 7: cmp silent/eof =====
+pagh:rv64> run /mnt/paghbox cmp -s /mnt/cmp1.txt /mnt/cmp2.txt
+run: /mnt/paghbox exited with code 1
+pagh:rv64> run /mnt/paghbox cmp /mnt/same1.txt /mnt/same2.txt
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox cmp /mnt/eof1.txt /mnt/eof2.txt
+cmp: EOF on /mnt/eof1.txt after byte 4, line 1
+run: /mnt/paghbox exited with code 1
+
+===== boot 8: sed =====
+pagh:rv64> run /mnt/paghbox sed -n 2p /mnt/sed.txt
+beta42
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox sed s/a/X/g /mnt/sed.txt
+XlphX
+betX42
+GXmmX
+deltX
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox sed 2,3d /mnt/sed.txt
+alpha
+delta
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox sed -n 1p;2p /mnt/sed.txt
+alpha
+beta42
+run: /mnt/paghbox exited with code 0
+
+===== boot 9: sed empty-global =====
+pagh:rv64> run /mnt/paghbox sed s/a*/X/g /mnt/sed.txt
+XlXpXhX
+XbXeXtX4X2X
+XGXmXmX
+XdXeXlXtX
+run: /mnt/paghbox exited with code 0
+
+===== boot 10: awk comparisons =====
+pagh:rv64> run /mnt/paghbox awk -F: $2>20{print$1,$2} /mnt/awk.txt
+banana 25
+date 30
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox awk -F: $1==banana{print$2} /mnt/awk.txt
+25
+run: /mnt/paghbox exited with code 0
+
+===== boot 11: awk regex/NR =====
+pagh:rv64> run /mnt/paghbox awk /a/{print$1,NR} /mnt/awk.txt
+apple:10 1
+banana:25 2
+date:30 4
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox awk -F: NR==2{print$2} /mnt/awk.txt
+25
+run: /mnt/paghbox exited with code 0
+
+===== boot 12: shuf =====
+pagh:rv64> run /mnt/paghbox shuf -n 3 /mnt/shuf.txt
+magenta
+blue
+green
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox shuf -e a b c
+c
+b
+a
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox shuf -i 1-5
+5
+3
+2
+4
+1
+run: /mnt/paghbox exited with code 0
+
+===== boot 13: numfmt core =====
+pagh:rv64> run /mnt/paghbox numfmt --to=si 1000 1500 1000000
+1.0k
+1.5k
+1.0M
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox numfmt --to=iec 1024 1536
+1.0K
+1.5K
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox numfmt --from=si 1.5K
+1500
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox numfmt --to=si --suffix=B --padding=8 1000
+   1.0kB
+run: /mnt/paghbox exited with code 0
+
+===== boot 14: numfmt extras =====
+pagh:rv64> run /mnt/paghbox numfmt --to=auto 1024 1500 1000000
+1.0K
+1.5k
+1.0M
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox numfmt --to=si --to-unit=1000 5000
+5
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox numfmt --from=iec 1Ki 2M
+1024
+2097152
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox numfmt --to=si abc
+numfmt: invalid number: 'abc'
+run: /mnt/paghbox exited with code 1
+
+===== boot 15: diff add/delete =====
+pagh:rv64> run /mnt/paghbox diff /mnt/diff_ins.txt /mnt/diff1.txt
+1a2
+> b
+2a4
+> d
+run: /mnt/paghbox exited with code 1
+pagh:rv64> run /mnt/paghbox diff /mnt/diff1.txt /mnt/diff_del.txt
+4d3
+< d
+run: /mnt/paghbox exited with code 1
+
+===== boot 16: errors =====
+pagh:rv64> run /mnt/paghbox base64 -d /mnt/invalid.b64
+base64: invalid input
+run: /mnt/paghbox exited with code 1
+pagh:rv64> run /mnt/paghbox rmdir
+usage: rmdir [-p] DIR...
+run: /mnt/paghbox exited with code 2
+pagh:rv64> run /mnt/paghbox sed
+usage: sed [-n] SCRIPT [FILE...]
+run: /mnt/paghbox exited with code 2
+pagh:rv64> run /mnt/paghbox awk
+usage: awk [-F SEP] 'PROGRAM' [FILE...]
+run: /mnt/paghbox exited with code 2
+
+===== boot 17: options usage =====
+pagh:rv64> run /mnt/paghbox base64 -z
+usage: base64 [-d] [-w N] [FILE]
+run: /mnt/paghbox exited with code 2
+pagh:rv64> run /mnt/paghbox tac /mnt/nope
+tac: /mnt/nope: No such file or directory
+run: /mnt/paghbox exited with code 1
+pagh:rv64> run /mnt/paghbox sum /mnt/nope
+sum: /mnt/nope: No such file or directory
+run: /mnt/paghbox exited with code 1
+pagh:rv64> run /mnt/paghbox shuf -i 5-1
+shuf: invalid range: '5-1'
+run: /mnt/paghbox exited with code 2
+

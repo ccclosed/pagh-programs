@@ -2,7 +2,7 @@
 
 Репозиторий портов: программы написаны **под нативный API `libpagh`**
 (соседний checkout `../pagh-api`), а не под Linux-совместимый слой. Один
-busybox-style ELF `paghbox` содержит 55 applet'ов; `tools/build_repo.py`
+busybox-style ELF `paghbox` содержит 67 applet'ов; `tools/build_repo.py`
 упаковывает его в `.ppkg` и пишет `repo/index`. Установщик `pkg` в ядре
 pagh-riscv — потребитель этого репозитория: скачивает пакет по HTTP, сверяет
 SHA-256/размер, ставит ELF в `/mnt/bin` и создаёт симлинки на команды.
@@ -10,15 +10,17 @@ SHA-256/размер, ставит ELF в `/mnt/bin` и создаёт симл�
 ## Структура
 
 ```
-catalog.md                 целевые 120 программ и честный статус (37 [x])
+catalog.md                 целевые 120 программ и честный статус (67 [x])
 docs/package-format.md     формат .ppkg и index (контракт с ядром)
 programs/                  crate paghbox: dispatch + applets/
   src/main.rs              argv[0]/`paghbox <applet>` + exit codes
   src/util.rs              EAGAIN-retry чтение, Input, вывод
-  src/applets/             55 модулей: echo true false yes pwd basename dirname seq
+  src/applets/             67 модулей: echo true false yes pwd basename dirname seq
                            cat wc head tail ls stat uname hostname arch nproc sleep
                            uptime date readlink realpath uniq sort nl fold expand
                            unexpand rev cut tr comm paste strings hexdump grep
+                           rmdir tac sum cksum base64 base32 diff cmp sed awk
+                           shuf numfmt (+ bre/codec helpers)
 tools/build_repo.py        cargo build -> .ppkg -> index, и --check
 repo/                      сгенерировано, в git не входит (см. ниже)
 ```
@@ -39,7 +41,7 @@ python3 tools/build_repo.py --check
 ```
 
 `build_repo.py` без аргументов сам вызывает cargo, затем пишет
-`repo/pkg/paghbox-1.2.0.ppkg` и `repo/index`. `--elf PATH` упаковывает готовый
+`repo/pkg/paghbox-1.3.0.ppkg` и `repo/index`. `--elf PATH` упаковывает готовый
 ELF, `--no-build` берёт стандартный путь без cargo, `--check` только
 перечитывает index/пакеты и проверяет magic, длины, манифест, SHA-256, размер
 payload'а и отсутствие «осиротевших» `.ppkg`.
@@ -86,14 +88,14 @@ payload по SHA-256/размеру **до** записи и создаёт си
 
 ### `size` в index
 
-В `index` поле `size` — длина **payload'а** (ELF), а не всего `.ppkg`: в
-манифесте `sha256` определён как digest payload'а, и контракт говорит
-«проверить payload против SHA-256 и size из index». Полная длина файла
-выводится из заголовка: `16 + manifest_len + payload_len`. Это единственная
-неоднозначность формата; она продублирована в отчёте Lead'у. `--check`
-проверяет именно такую трактовку.
+В `index` поля `size` и `sha256` описывают **весь `.ppkg`** — те байты,
+которые установщик скачивает и хеширует. Манифест внутри пакета хранит
+`sha256` только payload'а (ELF) и проверяется после этой загрузочной проверки.
+Полная длина файла складывается из заголовка:
+`16 + manifest_len + payload_len`. `--check` проверяет именно такую трактовку;
+это же зафиксировано в [`docs/package-format.md`](docs/package-format.md).
 
-## Applet'ы (55)
+## Applet'ы (67)
 
 | Команда | Что делает | Коды выхода |
 |---|---|---|
@@ -152,6 +154,18 @@ payload по SHA-256/размеру **до** записи и создаёт си
 | `factor` | trial division u64; `N: p q …` | 0; 1; 2 |
 | `which` | `/mnt/bin/<name>`, затем `<PWD>/<name>`; PATH не задан | 0; 1; 2 |
 | `mktemp` | `/mnt/tmp.XXXXXX` или `-p DIR`; pid+счётчик, без O_EXCL | 0; 1; 2 |
+| `rmdir` | пустые каталоги, `-p` — родители; `ENOTEMPTY` в диагностике; отказ для `.`/`..`/`/` | 0; 1; 2 |
+| `tac` | обратный порядок строк файла/stdin; последняя строка без `\n` дополняется | 0; 1; 2 |
+| `sum` | BSD 16-бит rotate (по умолчанию) и SysV (`-s`); `checksum blocks [name]` | 0; 1; 2 |
+| `cksum` | POSIX CRC-32 + размер: `crc size [name]` | 0; 1; 2 |
+| `base64` | encode/decode (`-d`), `-w N` (76; 0 — без переноса) | 0; 1 (ввод); 2 |
+| `base32` | RFC 4648 base32, те же `-d`/`-w N` | 0; 1 (ввод); 2 |
+| `diff` | normal-формат `NaM`/`NdM`/`NcM`, `<`/`>`/`---`; LCS (Hirschberg) | 0 одинаковы; 1 различия; 2 ошибка |
+| `cmp` | первый байт: `byte N, line L, offset 0xH`; `-s`, `-l` (octal); EOF-диагностика | 0; 1; 2 |
+| `sed` | `s/RE/REP/[g]`, `p`, `d`, адреса `N`/`N,M`, `-n`; BRE-lite, без `-i` | 0; 1; 2 (скрипт) |
+| `awk` | `-F`, `$0/$N`, `NR`, `NF`, `/re/`, сравнения, `{print ...}`; без массивов/BEGIN | 0; 1; 2 (программа) |
+| `shuf` | строки/stdin, `-n N`, `-e ARGS...`, `-i LO-HI`; фиксированный xorshift seed | 0; 1; 2 |
+| `numfmt` | `--to`/`--from=si\|iec\|auto`, `--to-unit`, `--suffix`, `--padding`; u128, без FP | 0; 1 (число); 2 |
 
 
 `cat/wc/head/tail` и новые файловые фильтры читают через `libpagh`: `read` на
@@ -168,94 +182,96 @@ QEMU; живым запуском проверен его разбор аргу�
 отрицательные `head -n -N`, `tail -f`, `wc -m`, суффиксы/опции GNU сверх
 перечисленных. `ls` без цветов/рекурсии, `stat -c`, `sort -k/-t/-o`,
 `uniq` без выходного файла, `cut -c/-b/--complement`, `tr -c/-t` и именованные
-классы, `grep` без alternation/групп/ERE, `hexdump` только `-C`-вид. FPU в user-mode включается ядром с 0.11.0, но `sort -n` сознательно не
-использует плавающую точку: сравниваются десятичные знаки точно (без
+классы, `grep` без alternation/групп/ERE, `hexdump` только `-C`-вид.
+Подмножества `sed`/`awk`/`diff`/`cmp`/`numfmt` перечислены в их модулях и в
+разделе «Ограничения среды и ABI». FPU в user-mode включается ядром с 0.11.0,
+но `sort -n`, `awk`, `numfmt` и остальные новые инструменты сознательно не
+используют плавающую точку: сравниваются десятичные знаки точно (без
 экспоненты и `inf`), чтобы порядок не зависел от округления f64. Форматирование
 `wc` — политика порта, а не ABI.
 
 ## Статус и тестирование
 
-Сборка проверена: `cargo build --release --target riscv64gc-unknown-none-elf`
-даёт статический RV64 ELF с entry `0x10000` и тремя PT_LOAD (R+X / R / R+W),
-как требует `pagh-user.ld`; `readelf` подтверждает раскладку, `llvm-objdump -d`
-не находит ни одной FP-инструкции (ядро не включает FPU в U-mode, поэтому
-`sort -n` сравнивает десятичные точно, без плавающей точки). Пакет
-`paghbox 1.2.0` собран, `python3 tools/build_repo.py --check` зелёный.
+Сборка: `cargo build --release --target riscv64gc-unknown-none-elf` даёт
+статический RV64 ELF; `python3 tools/build_repo.py` пишет
+`repo/pkg/paghbox-1.3.0.ppkg`, а `python3 tools/build_repo.py --check` зелёный.
+Пакет `paghbox 1.3.0` содержит 67 команд; его размер и SHA-256 приведены в
+разделе [`repo/`](#repo-и-воспроизводимость) ниже. `MAX_COMMANDS = 160` в
+установщике 0.16.0 с запасом покрывает 67.
 
-Живой прогон сделан на **ядре 0.10.1** (`pagh-riscv/target/.../debug/pagh`,
-native ABI + pkg installer), QEMU `virt`, 256 MiB. Диск 64 MiB собран на хосте
-`mke2fs -q -t ext2 -F -b 4096 -d rootfs disk.img 64M`; в корне образа —
-`paghbox` 1.2.0 и фикстуры (файлы, подкаталоги, симлинк, двоичные данные).
-Драйвер — Python + Unix-сокет QEMU; одна загрузка, 81 команда
-`run /mnt/paghbox ...` подряд, после каждой проверялись вывод и
-`run: /mnt/paghbox exited with code N`.
+Живой прогон сделан на **ядре 0.16.0** (`/home/oleg/pagh-riscv/target/.../debug/pagh`,
+native ABI + pkg installer), QEMU `virt`, 256 MiB, диск 64 MiB ext2
+(`mke2fs -q -t ext2 -F -b 4096 -d rootfs disk.img 64M`). Драйвер —
+`tools/live_test.py`: он собирает образ, копирует `paghbox` и фикстуры и делает
+17 загрузок по **1–4 команды** (короткие группы обязательны: serial-драйвер
+теряет длинные строки), проверяя вывод и `run: ... exited with code N` после
+каждой. Результат: **50 PASS, 0 FAIL**, все 12 новых applet'ов проверены
+функционально; `tr` по-прежнему только на разборе аргументов.
 
-**81 PASS, 0 FAIL.** 24 из 25 новых applet'ов проверены функционально;
-`tr` по спецификации читает stdin, а у консольного fd 0 нет EOF и нет
-пайпов/редиректа, поэтому для него живым запуском проверен только разбор
-аргументов (четыре случая exit 2). Полный список PASS-строк и сырой транскрипт:
-[`docs/live-testing.md`](docs/live-testing.md),
-[`docs/live-1.2.0-transcript.txt`](docs/live-1.2.0-transcript.txt).
+Сырой транскрипт: [`docs/live-1.3.0-transcript.txt`](docs/live-1.3.0-transcript.txt),
+PASS-строки и таблица: [`docs/live-testing.md`](docs/live-testing.md).
 
 | Проверка | Результат |
 |---|---|
-| `uname -a` | `pagh pagh-riscv 0.10.0 0.10.1 riscv64` |
-| `ls -l /mnt` | `drwxr-xr-x 4096 dir1/`, `-rw-r--r-- 35 hello.txt`, `-rwxr-xr-x 298288 paghbox` |
-| `stat /mnt/hello.txt` | `/mnt/hello.txt: file, size=35, mode=0o644, ino=23` |
-| `readlink /mnt/link` | `hello.txt`; не-симлинк — exit 1 |
-| `realpath /mnt/dir1/../hello.txt` | `/mnt/hello.txt` |
-| `uniq`, `uniq -c`, `-d`, `-u` | `apple banana cherry date`; counts `2/1/3/1` |
-| `sort`, `sort -r`, `sort -n`, `sort -n -r`, `sort -u` | точные последовательности, включая `-3 -0.5 0 02 2 3.5 7 10` |
-| `nl`, `nl -b a` | номера 1..3 / 1..6 с табами |
-| `fold -w 4`, `expand -t 4`, `unexpand`, `unexpand -a` | переносы/табы совпали побайтно |
-| `rev`, `cut -d : -f ...`, `comm`, `paste` | точные последовательности; `comm` с позиционными табами |
-| `strings -n 4/6`, `hexdump -C` | `hello`, `world!`, `longstring1234`; `|Hello, world!.|` |
-| `grep` (12 сценариев) | литерал, `-i/-v/-n/-c/-l/-F`, `^ $ . * [] [^]`, exit 0/1/2 |
-| ошибки/usage | `ls /mnt/missing` exit 1; `grep [` exit 2; `fold -w 0`, `cut` без `-f`, `sleep nope` exit 2 |
-| `sleep 0.2`, `sleep 1.5` | exit 0 (nanosleep, округление до тика) |
+| `uname -a` | `pagh pagh-riscv 0.10.0 0.16.1 riscv64` (release/version-константы ядра; Cargo-версия main — 0.16.0) |
+| `rmdir -p p1/p2/p3` (cwd `/mnt`) | exit 0, каталоги `p3,p2,p1` удалены |
+| `rmdir /mnt/d_empty /mnt/d_nonempty` | первый удалён, `rmdir: /mnt/d_nonempty: Directory not empty`, exit 1 |
+| `tac` | `three two one` |
+| `sum`, `sum -s`, `cksum` | `36979     1`, `542 1`, `3015617425 6` — совпадает с GNU на хосте |
+| `base64`, `base64 -w 4`, `base32` | `aGVsbG8K`; `aGVs`/`bG8K`; `NBSWY3DPBI======`; decode → `hello` |
+| `diff` same/change | нет вывода exit 0; `2c2 ... 4c4 ...` exit 1 |
+| `cmp`, `cmp -l`, `cmp -s`, EOF | `byte 5, line 2, offset 0x4`; `5 144 170`; тихий exit 1; `EOF on ... after byte 4` |
+| `sed -n 2p`, `s/a/X/g`, `2,3d`, `1p;2p` | `beta42`; `XlphX...`; `alpha delta`; `alpha beta42` |
+| `awk -F: $2>20{...}`, `/a/{...}`, `NR==2`, `$1==banana` | `banana 25 / date 30`; regex+NR; `25`; `25` |
+| `shuf -n 3`, `-e`, `-i` | `magenta blue green`; `c b a`; `5 3 2 4 1` (фиксированный seed) |
+| `numfmt --to=si/iec/auto`, `--from`, `--to-unit`, `--suffix`, `--padding` | `1.0k`, `1.0K`, `1.0M`; `1500`; `5`; `   1.0kB` |
+| usage/ошибки | `rmdir`/`sed`/`awk`/`base64 -z` → exit 2; `numfmt abc` → exit 1 |
 
-Несколько `run` на одну загрузку работают. Прежние замечания README о зависании
-ext2 после 48 KiB и о падении шелла после первой user-программы относились к
-старому ядру и на 0.10.1 не воспроизвелись: ELF на 298 288 байт с `.rodata` по
-файловому смещению `0x16000` загружается и все 81 команды проходят. Smoke-тест:
+## Ограничения среды и ABI
 
-```sh
-run /mnt/paghbox echo hello
-run /mnt/paghbox ls -l /mnt
-run /mnt/paghbox wc /mnt/hello.txt
-```
-
-## Ограничения ABI для следующих партий
-
-Эти 25 applet'ов намеренно read-only. ABI (`pagh-api/docs/abi.md`) даёт только
-`read`, `write`, `openat`, `close`, `lseek`, `fstat`, `getdents64`, `brk`,
-`clock_gettime`, `nanosleep`, `uname`, `readlinkat`, `getpid`, `sched_yield` и
-`exit`. Нет `unlinkat`, `renameat`, `mkdirat`, `symlinkat`, `linkat`,
-`ftruncate`, `fchmodat`, `statfs`; нет `poll`, `pipe`, `dup`, `exec`. Поэтому
-`rm`, `mv` (rename), `mkdir`, `ln`, `chmod`, `truncate`, `df`, `find -delete`
-нельзя честно реализовать в userland до расширения ABI. Шелловые `mkdir`, `rm`,
-`cp` в ядре — внутренние команды, а не доступные программам syscall'ы.
-`cp`/`tee`/`split`/`touch` (create) технически возможны на `openat(O_CREAT)` уже
-сейчас, но выходят за рамки этой партии.
-
-Установщик `pkg` с 0.10.2 принимает до 160 команд на `applet-bundle`
-(`MAX_COMMANDS` в `src/pkg/mod.rs`), поэтому 37-командный `paghbox` ставится
-одним пакетом: `pkg install paghbox` создаёт все симлинки, а
-`run /mnt/bin/sort -n /mnt/nums.txt` работает. На 0.10.1 лимит был 32 команды и
-установка такого пакета отказывала (`pkg: install: package manifest is invalid`)
-— это была реализационная граница ядра, не формата.
+* **Шелл ядра** делит строку по пробелам и не понимает кавычки, пайпы и
+  редиректы. Поэтому `awk`-программа с пробелами недоступна: в живой проверке
+  используются компактные формы `{print$1,$2}` и `-F:`; `sed`-скрипт тоже
+  передаётся одним словом.
+* **У консольного fd 0 нет EOF**, а пайпов нет. Ветки «файл или stdin» есть у
+  всех новых инструментов (`-` = stdin через `util::Input`), но живым запуском
+  проверены файловые операнды; stdin-режим `tr` проверен только разбором
+  аргументов и остаётся ограничением среды.
+* **`shuf`** намеренно использует фиксированный seed
+  (`0x9E3779B97F4A7C15`, xorshift64*), потому что в целевом ABI нет
+  `getrandom`; одинаковый вход даёт одинаковый порядок. Это записано в
+  `programs/src/applets/shuf.rs`.
+* **Подмножества:** `sed` без `-i`, `-e`, групп/backrefs, `y/a/i/c/r/w`;
+  `awk` без массивов, функций, арифметики, `BEGIN`/`END`, `printf`, `getline`
+  и переменных; `diff` только normal-формат (без `-u` и рекурсии); `cmp` при
+  ошибке чтения возвращает 1 по правилу задания, а не GNU-е 2; `numfmt` не
+  читает stdin.
+* **`numfmt`** считает в `u128`/десятичных долях, без плавающей точки; при
+  выбранной единице печатает один десятичный знак (округление половины от
+  нуля). `--to=auto` — политика порта: IEC, если значение ≥ 1024 и делится на
+  1024 нацело, иначе SI от 1000.
+* **`diff`** использует LCS (Hirschberg), поэтому его разбиение на hunks может
+  отличаться от GNU при нескольких равных LCS; формат и применяемость патча
+  проверены фаззингом на хосте (300 случайных пар, `patch` восстанавливает
+  правый файл).
+* **FPU:** новые инструменты не используют `f32`/`f64`; `numfmt` и `awk`
+  сравнивают десятичные строки/`u128` точно, поэтому результат не зависит от
+  FPU-политики ядра.
+* **Ядро 0.16.0** уже даёт fork/exec/wait, файловые мутации, mmap, pipes, poll,
+  sockets, threads и signals (52 syscall'а), но `paghbox` остаётся набором
+  CLI-фильтров: шелл ядра не создаёт конвейеров, а `pkg` ставит один bundle.
+  Соседние репозитории (`pagh-riscv`, `pagh-api`) не изменялись.
 
 ## `repo/` и воспроизводимость
 
 `target/` и `repo/` в [`.gitignore`](.gitignore): бинарники не коммитятся.
 `repo/` полностью воспроизводится командой `python3 tools/build_repo.py` из
 исходников и пинованного тулчейна; индекс детерминирован по содержимому
-(единственный недетерминизм — сам ELF от rustc). Текущий пакет — 298 288 байт
-payload / 298 732 байт `.ppkg` (около 292 KiB), то есть меньше 2 MB, но в git
-он всё равно не попал: его место — на HTTP-зеркале, а не в истории.
+(единственный недетерминизм — сам ELF от rustc). Текущий пакет — 514016
+байт payload / 514617 байт `.ppkg`, 67 команд, SHA-256
+`d9e64393b36611585b0a0985b23f73dbdc897578de232ca772a0a55f612ed473`; в git он не попал (`.gitignore`), его место — на
+HTTP-зеркале.
 
-`catalog.md` — ровно 120 уникальных имён; `[x]` стоят у 37 реализованных,
-остальные `[ ]`. Дубликаты (`printf`, `awk`, `base64`, `free`)
-и не-команды (`tail -f`, `yes | head`, `login`, `sudo`) заменены на реальные
-CLI-имена (`factor`, `nm`, `numfmt`, `cal`, `more`, `shuf`, `addr2line`,
-`arch`).
+`catalog.md` — ровно 120 уникальных имён; `[x]` стоят у 67 реализованных,
+остальные `[ ]`. Список проверяется `tools/live_test.py` и `grep`-ом по
+`NAMES`: все 67 имён входят в `commands=` пакета.

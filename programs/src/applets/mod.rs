@@ -7,13 +7,21 @@
 use alloc::string::String;
 
 pub mod arch;
+pub mod awk;
+pub mod base32;
+pub mod base64;
 pub mod basename;
+mod bre;
 pub mod cat;
 pub mod chmod;
+pub mod cksum;
+pub mod cmp;
+mod codec;
 pub mod comm;
 pub mod cp;
 pub mod cut;
 pub mod date;
+pub mod diff;
 pub mod dirname;
 pub mod du;
 pub mod echo;
@@ -35,18 +43,24 @@ pub mod mktemp;
 pub mod mv;
 pub mod nl;
 pub mod nproc;
+pub mod numfmt;
 pub mod paste;
 pub mod printf;
 pub mod pwd;
 pub mod readlink;
 pub mod realpath;
 pub mod rev;
+pub mod rmdir;
 pub mod rm;
+pub mod sed;
 pub mod seq;
+pub mod shuf;
 pub mod sleep;
 pub mod sort;
 pub mod stat;
 pub mod strings;
+pub mod sum;
+pub mod tac;
 pub mod tail;
 pub mod test;
 pub mod touch;
@@ -120,6 +134,18 @@ pub const NAMES: &[&str] = &[
     "factor",
     "which",
     "mktemp",
+    "rmdir",
+    "tac",
+    "sum",
+    "cksum",
+    "base64",
+    "base32",
+    "diff",
+    "cmp",
+    "sed",
+    "awk",
+    "shuf",
+    "numfmt",
 ];
 
 /// Run an applet by name; `None` means "no such applet".
@@ -181,6 +207,18 @@ pub fn dispatch(name: &str, args: &[String]) -> Option<i32> {
         "strings" => strings::run(args),
         "hexdump" => hexdump::run(args),
         "grep" => grep::run(args),
+        "rmdir" => rmdir::run(args),
+        "tac" => tac::run(args),
+        "sum" => sum::run(args),
+        "cksum" => cksum::run(args),
+        "base64" => base64::run(args),
+        "base32" => base32::run(args),
+        "diff" => diff::run(args),
+        "cmp" => cmp::run(args),
+        "sed" => sed::run(args),
+        "awk" => awk::run(args),
+        "shuf" => shuf::run(args),
+        "numfmt" => numfmt::run(args),
         _ => return None,
     })
 }
