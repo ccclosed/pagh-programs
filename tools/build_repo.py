@@ -51,7 +51,6 @@ ARCH = "riscv64"
 KIND = "applet-bundle"
 ENTRY = "paghbox"
 NAME = "paghbox"
-DESCRIPTION = "pagh busybox-style bundle: the first 12 native applets"
 
 REQUIRED_MANIFEST = {
     "name",
@@ -107,25 +106,6 @@ def applet_names() -> list[str]:
         if not re.search(rf'"{re.escape(name)}"\s*=>', text):
             raise BuildError(f"applet {name!r} has no dispatch arm")
 
-    expected = [
-        "echo",
-        "true",
-        "false",
-        "yes",
-        "pwd",
-        "basename",
-        "dirname",
-        "seq",
-        "cat",
-        "wc",
-        "head",
-        "tail",
-    ]
-    if names != expected:
-        raise BuildError(
-            "implemented applet list drifted from the first-12 contract:\n"
-            f"  expected: {expected}\n  found:    {names}"
-        )
     return names
 
 
@@ -154,6 +134,7 @@ def validate_elf(data: bytes, origin: str) -> None:
 def build_package(elf: bytes, version: str, commands: list[str]) -> tuple[bytes, dict]:
     payload_sha = hashlib.sha256(elf).hexdigest()
     command_list = ",".join(commands)
+    description = f"pagh busybox-style applet bundle: {len(commands)} native commands"
     manifest = (
         f"name={NAME}\n"
         f"version={version}\n"
@@ -161,7 +142,7 @@ def build_package(elf: bytes, version: str, commands: list[str]) -> tuple[bytes,
         f"kind={KIND}\n"
         f"commands={command_list}\n"
         f"entry={ENTRY}\n"
-        f"description={DESCRIPTION}\n"
+        f"description={description}\n"
         f"sha256={payload_sha}\n"
     ).encode("utf-8")
 
