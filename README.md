@@ -2,7 +2,7 @@
 
 Репозиторий портов: программы написаны **под нативный API `libpagh`**
 (соседний checkout `../pagh-api`), а не под Linux-совместимый слой. Один
-busybox-style ELF `paghbox` содержит 37 applet'ов; `tools/build_repo.py`
+busybox-style ELF `paghbox` содержит 55 applet'ов; `tools/build_repo.py`
 упаковывает его в `.ppkg` и пишет `repo/index`. Установщик `pkg` в ядре
 pagh-riscv — потребитель этого репозитория: скачивает пакет по HTTP, сверяет
 SHA-256/размер, ставит ELF в `/mnt/bin` и создаёт симлинки на команды.
@@ -39,7 +39,7 @@ python3 tools/build_repo.py --check
 ```
 
 `build_repo.py` без аргументов сам вызывает cargo, затем пишет
-`repo/pkg/paghbox-1.1.0.ppkg` и `repo/index`. `--elf PATH` упаковывает готовый
+`repo/pkg/paghbox-1.2.0.ppkg` и `repo/index`. `--elf PATH` упаковывает готовый
 ELF, `--no-build` берёт стандартный путь без cargo, `--check` только
 перечитывает index/пакеты и проверяет magic, длины, манифест, SHA-256, размер
 payload'а и отсутствие «осиротевших» `.ppkg`.
@@ -161,12 +161,12 @@ user-mode не включён FPU, поэтому `sort -n` не использ�
 как требует `pagh-user.ld`; `readelf` подтверждает раскладку, `llvm-objdump -d`
 не находит ни одной FP-инструкции (ядро не включает FPU в U-mode, поэтому
 `sort -n` сравнивает десятичные точно, без плавающей точки). Пакет
-`paghbox 1.1.0` собран, `python3 tools/build_repo.py --check` зелёный.
+`paghbox 1.2.0` собран, `python3 tools/build_repo.py --check` зелёный.
 
 Живой прогон сделан на **ядре 0.10.1** (`pagh-riscv/target/.../debug/pagh`,
 native ABI + pkg installer), QEMU `virt`, 256 MiB. Диск 64 MiB собран на хосте
 `mke2fs -q -t ext2 -F -b 4096 -d rootfs disk.img 64M`; в корне образа —
-`paghbox` 1.1.0 и фикстуры (файлы, подкаталоги, симлинк, двоичные данные).
+`paghbox` 1.2.0 и фикстуры (файлы, подкаталоги, симлинк, двоичные данные).
 Драйвер — Python + Unix-сокет QEMU; одна загрузка, 81 команда
 `run /mnt/paghbox ...` подряд, после каждой проверялись вывод и
 `run: /mnt/paghbox exited with code N`.
@@ -176,7 +176,7 @@ native ABI + pkg installer), QEMU `virt`, 256 MiB. Диск 64 MiB собран 
 пайпов/редиректа, поэтому для него живым запуском проверен только разбор
 аргументов (четыре случая exit 2). Полный список PASS-строк и сырой транскрипт:
 [`docs/live-testing.md`](docs/live-testing.md),
-[`docs/live-1.1.0-transcript.txt`](docs/live-1.1.0-transcript.txt).
+[`docs/live-1.2.0-transcript.txt`](docs/live-1.2.0-transcript.txt).
 
 | Проверка | Результат |
 |---|---|

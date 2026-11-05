@@ -9,39 +9,57 @@ use alloc::string::String;
 pub mod arch;
 pub mod basename;
 pub mod cat;
+pub mod chmod;
 pub mod comm;
+pub mod cp;
 pub mod cut;
 pub mod date;
 pub mod dirname;
+pub mod du;
 pub mod echo;
 pub mod expand;
+pub mod expr;
+pub mod factor;
 pub mod false_applet;
+pub mod file;
+pub mod find;
 pub mod fold;
 pub mod grep;
 pub mod head;
 pub mod hexdump;
 pub mod hostname;
+pub mod ln;
 pub mod ls;
+pub mod mkdir;
+pub mod mktemp;
+pub mod mv;
 pub mod nl;
 pub mod nproc;
 pub mod paste;
+pub mod printf;
 pub mod pwd;
 pub mod readlink;
 pub mod realpath;
 pub mod rev;
+pub mod rm;
 pub mod seq;
 pub mod sleep;
 pub mod sort;
 pub mod stat;
 pub mod strings;
 pub mod tail;
+pub mod test;
+pub mod touch;
 pub mod tr;
+pub mod tree;
 pub mod true_applet;
+pub mod truncate;
 pub mod uname;
 pub mod unexpand;
 pub mod uniq;
 pub mod uptime;
 pub mod wc;
+pub mod which;
 pub mod yes;
 
 /// Every applet in the bundle. `tools/build_repo.py` parses this list to build
@@ -84,6 +102,24 @@ pub const NAMES: &[&str] = &[
     "strings",
     "hexdump",
     "grep",
+    "rm",
+    "mkdir",
+    "touch",
+    "cp",
+    "mv",
+    "ln",
+    "truncate",
+    "chmod",
+    "find",
+    "du",
+    "tree",
+    "file",
+    "printf",
+    "expr",
+    "test",
+    "factor",
+    "which",
+    "mktemp",
 ];
 
 /// Run an applet by name; `None` means "no such applet".
@@ -102,6 +138,25 @@ pub fn dispatch(name: &str, args: &[String]) -> Option<i32> {
         "head" => head::run(args),
         "tail" => tail::run(args),
         "ls" => ls::run(args),
+        "rm" => rm::run(args),
+        "mkdir" => mkdir::run(args),
+        "touch" => touch::run(args),
+        "cp" => cp::run(args),
+        "mv" => mv::run(args),
+        "ln" => ln::run(args),
+        "truncate" => truncate::run(args),
+        "chmod" => chmod::run(args),
+        "find" => find::run(args),
+        "du" => du::run(args),
+        "tree" => tree::run(args),
+        "file" => file::run(args),
+        "printf" => printf::run(args),
+        "expr" => expr::run(args),
+        "test" => test::run(args, false),
+        "[" => test::run(args, true),
+        "factor" => factor::run(args),
+        "which" => which::run(args),
+        "mktemp" => mktemp::run(args),
         "stat" => stat::run(args),
         "uname" => uname::run(args),
         "hostname" => hostname::run(args),

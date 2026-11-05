@@ -4,6 +4,7 @@
 //! Everything returns [`Errno`]; applets decide the diagnostics and the exit
 //! code. Nothing here panics on bad input.
 
+use alloc::string::String;
 use alloc::vec::Vec;
 
 use libpagh::errno::{Errno, Result};
@@ -214,4 +215,46 @@ pub fn digits(mut value: u64) -> usize {
         width += 1;
     }
     width
+}
+
+/// Push onto a `Vec`, turning allocator failure into `ENOMEM`.
+///
+/// The ABI's allocator aborts on an allocation failure, which would turn a
+/// recoverable "out of memory" into exit 102. The applets that grow a
+/// collection call this instead of `Vec::push`; the caller reports the error
+/// with [`report`] and exits 1.
+pub fn push<T>(vec: &mut Vec<T>, value: T) -> Result<()> {
+    vec.try_reserve(1).map_err(|_| Errno::ENOMEM)?;
+    vec.push(value);
+    Ok(())
+}
+
+/// `parent` + `/` + `name`, without doubling a trailing slash.
+///
+/// The VFS accepts absolute paths only, so `parent` is normally already
+/// absolute (the applets pass the operand's spelling or a resolved path).
+pub fn join_path(parent: &str, name: &str) -> String {
+    let mut out = String::with_capacity(parent.len() + name.len() + 1);
+    out.push_str(parent);
+    if !out.ends_with('/') {
+        out.push('/');
+    }
+    out.push_str(name);
+    out
+}
+
+/// The kind of `path` **without following a final symbolic link**.
+///
+/// The ABI has no `lstat`: `fs::stat` is `openat` + `fstat` and therefore
+/// follows the final component. `readlinkat` is the one call that looks at the
+/// link itself, so a successful `fs::read_link` is how an applet detects a
+/// symlink; anything else is classified by `fs::stat` (which follows it).
+///
+/// A non-link answers `EINVAL`; that is the expected branch, not an error.
+pub fn path_kind(path: &str) -> Result<EntryKind> {
+    match libpagh::fs::read_link(path) {
+        Ok(_) => Ok(EntryKind::Symlink),
+        Err(Errno::EINVAL) => Ok(libpagh::fs::stat(path)?.entry_kind()),
+        Err(err) => Err(err),
+    }
 }
