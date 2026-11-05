@@ -15,7 +15,7 @@ docs/package-format.md     формат .ppkg и index (контракт с яд
 programs/                  crate paghbox: dispatch + applets/
   src/main.rs              argv[0]/`paghbox <applet>` + exit codes
   src/util.rs              EAGAIN-retry чтение, Input, вывод
-  src/applets/             37 модулей: echo true false yes pwd basename dirname seq
+  src/applets/             55 модулей: echo true false yes pwd basename dirname seq
                            cat wc head tail ls stat uname hostname arch nproc sleep
                            uptime date readlink realpath uniq sort nl fold expand
                            unexpand rev cut tr comm paste strings hexdump grep
@@ -93,7 +93,7 @@ payload по SHA-256/размеру **до** записи и создаёт си
 неоднозначность формата; она продублирована в отчёте Lead'у. `--check`
 проверяет именно такую трактовку.
 
-## Applet'ы (37)
+## Applet'ы (55)
 
 | Команда | Что делает | Коды выхода |
 |---|---|---|
@@ -134,6 +134,25 @@ payload по SHA-256/размеру **до** записи и создаёт си
 | `strings` | серии ≥N (4) печатных ASCII (`0x20..0x7e`), `-n N`; потоково | 0; 1; 2 |
 | `hexdump` | `-C`-подобный вид: offset, 16 байт hex, ASCII; несколько файлов — один поток | 0; 1; 2 |
 | `grep` | литерал или BRE-подмножество (`^ $ . * [] [^] \`), `-i -v -n -c -l -F`; несколько файлов; 0 матч / 1 нет / 2 ошибка | 0; 1; 2 |
+| `rm` | файлы/каталоги, `-r/-R`, `-f`, `-d`; симлинк удаляется как ссылка | 0; 1 при ошибке |
+| `mkdir` | каталоги, `-p`; mode принимается и игнорируется (нет set_mode) | 0; 1; 2 |
+| `touch` | создать файл, существующий не обрезает; utime в ABI нет | 0; 1; 2 |
+| `cp` | файлы, `-r` каталоги, `-f`, симлинки копируются ссылкой | 0; 1; 2 |
+| `mv` | `renameat2` в пределах одной ФС; cross-fs → ENOTSUP | 0; 1; 2 |
+| `ln` | hard link по умолчанию, `-s` символическая (цель как есть) | 0; 1; 2 |
+| `truncate` | `-s SIZE`, `-c`; ftruncate | 0; 1; 2 |
+| `chmod` | octal MODE; per-run override, **не persist** (fchmodat) | 0; 1; 2 |
+| `find` | пути, `-name GLOB`, `-type f/d/l`, `-maxdepth N`, `-print`; без -delete/-exec | 0; 1; 2 |
+| `du` | `-s`, `-a`, `-h`; рекурсивные размеры | 0; 1; 2 |
+| `tree` | рекурсивное дерево, `-L N`; счётчики каталогов/файлов | 0; 1; 2 |
+| `file` | пусто/ELF/каталог/симлинк/текст-vs-бинарный по содержимому | 0; 1; 2 |
+| `printf` | `%s %d %i %x %X %o %c %%`, escapes; аргументы циклятся | 0; 1; 2 |
+| `expr` | целочисленная арифметика, сравнения, `!`; 0/1/2 | 0; 1; 2 |
+| `test` / `[` | `-e -f -d -s -L -r -w -x -z -n`, `= != -eq…` | 0/1/2 |
+| `factor` | trial division u64; `N: p q …` | 0; 1; 2 |
+| `which` | `/mnt/bin/<name>`, затем `<PWD>/<name>`; PATH не задан | 0; 1; 2 |
+| `mktemp` | `/mnt/tmp.XXXXXX` или `-p DIR`; pid+счётчик, без O_EXCL | 0; 1; 2 |
+
 
 `cat/wc/head/tail` и новые файловые фильтры читают через `libpagh`: `read` на
 fd файла или 0, а на `EAGAIN` (консольный ввод без байта) делают
@@ -149,9 +168,9 @@ QEMU; живым запуском проверен его разбор аргу�
 отрицательные `head -n -N`, `tail -f`, `wc -m`, суффиксы/опции GNU сверх
 перечисленных. `ls` без цветов/рекурсии, `stat -c`, `sort -k/-t/-o`,
 `uniq` без выходного файла, `cut -c/-b/--complement`, `tr -c/-t` и именованные
-классы, `grep` без alternation/групп/ERE, `hexdump` только `-C`-вид. В
-user-mode не включён FPU, поэтому `sort -n` не использует плавающую точку:
-сравниваются десятичные знаки точно (без экспоненты и `inf`). Форматирование
+классы, `grep` без alternation/групп/ERE, `hexdump` только `-C`-вид. FPU в user-mode включается ядром с 0.11.0, но `sort -n` сознательно не
+использует плавающую точку: сравниваются десятичные знаки точно (без
+экспоненты и `inf`), чтобы порядок не зависел от округления f64. Форматирование
 `wc` — политика порта, а не ABI.
 
 ## Статус и тестирование
