@@ -9,6 +9,7 @@ use alloc::vec::Vec;
 use libpagh::errno::{Errno, Result};
 use libpagh::fs::File;
 use libpagh::sys;
+use libpagh::EntryKind;
 
 /// Exit code for a normal result.
 pub const EXIT_OK: i32 = 0;
@@ -110,6 +111,83 @@ pub fn display_name(name: &str) -> &str {
         "standard input"
     } else {
         name
+    }
+}
+
+/// Read a whole operand into memory (`-` is stdin).
+///
+/// The line-oriented applets use this instead of a hand-written reader: the
+/// input has to be sorted/grouped/cut anyway, and [`read_all`] already retries
+/// `EAGAIN` and uses `try_reserve`.
+pub fn read_input(name: &str) -> Result<Vec<u8>> {
+    let input = Input::open(name)?;
+    read_all(input.fd())
+}
+
+/// Write `line` and a terminating newline to `fd`.
+///
+/// Output errors are returned rather than ignored, so an applet can print the
+/// conventional `program: write error: ...` diagnostic and exit 1.
+pub fn write_line(fd: i32, line: &[u8]) -> Result<()> {
+    write_all(fd, line)?;
+    write_all(fd, b"\n")
+}
+
+/// Split a byte buffer into lines, without the trailing `\n`.
+///
+/// The rules are the usual text-tool ones:
+///
+/// * `"a\nb\n"` yields `"a"`, `"b"`;
+/// * `"a\nb"` yields `"a"`, `"b"` (the last line needs no newline);
+/// * `"\n"` yields one empty line; `""` yields no lines.
+///
+/// Splitting is on ASCII LF only; a CR, if present, stays in the line. The
+/// iterator borrows the buffer, so a whole file costs one allocation plus the
+/// line offsets the caller stores.
+pub fn lines(data: &[u8]) -> Lines<'_> {
+    Lines {
+        data,
+        start: 0,
+        done: false,
+    }
+}
+
+/// Iterator returned by [`lines`].
+pub struct Lines<'a> {
+    data: &'a [u8],
+    start: usize,
+    done: bool,
+}
+
+impl<'a> Iterator for Lines<'a> {
+    type Item = &'a [u8];
+
+    fn next(&mut self) -> Option<&'a [u8]> {
+        if self.done || self.start >= self.data.len() {
+            self.done = true;
+            return None;
+        }
+        let rest = &self.data[self.start..];
+        match rest.iter().position(|byte| *byte == b'\n') {
+            Some(offset) => {
+                self.start += offset + 1;
+                Some(&rest[..offset])
+            }
+            None => {
+                self.done = true;
+                Some(rest)
+            }
+        }
+    }
+}
+
+/// A human-readable name for an ABI [`EntryKind`], as used by `stat`.
+pub fn kind_name(kind: EntryKind) -> &'static str {
+    match kind {
+        EntryKind::File => "file",
+        EntryKind::Dir => "directory",
+        EntryKind::Symlink => "symlink",
+        EntryKind::Other => "other",
     }
 }
 
