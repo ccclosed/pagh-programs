@@ -1,0 +1,77 @@
+# paghbox 1.8.0: pkg install and symlink live check
+
+Host: `python3 -m http.server 8788 --bind 127.0.0.1 --directory repo`.
+Guest: QEMU `virt`, kernel 0.16.1 debug, 64 MiB ext2, `--net`; the guest
+reaches the host as `10.0.2.2:8788`.
+The package was built by `python3 tools/build_repo.py`: 891040-byte payload,
+891981-byte `.ppkg`, payload SHA-256
+`9f6dbe08c1b0f61e0e9057f9fd037663947a4127ba669a129eb6bcbff3f8b906`, package
+SHA-256 `94832c9240b1dbeed68708576fa5f73fd9682011512e6f627cf771896e4e83ee`.
+The disk starts empty except for `abc.txt` and `hello.txt`; there is no
+pre-installed `paghbox`.
+
+Boot 1 installs from the freshly built `repo/`; boot 2 reuses the same disk
+without a NIC and runs two installer-created symlinks, including the new
+`sha3sum` and `calc`.
+
+```text
+==== install ====
+Type 'help' for the command list.
+
+pagh:rv64> cd /mnt
+pagh:rv64> pkg repo http://10.0.2.2:8788/
+pkg: repo http://10.0.2.2:8788/
+pagh:rv64> pkg index
+pkg: index 1 package(s)
+pagh:rv64> pkg install paghbox
+pkg: installed paghbox 1.8.0
+pagh:rv64>
+```
+
+```text
+==== symlink ====
+pagh:rv64> cd /mnt
+pagh:rv64> run /mnt/bin/sha3sum /mnt/abc.txt
+3a985da74fe225b2045c172d6bd390bd855f086e3e9d525b46bfe24511431532  /mnt/abc.txt
+run: /mnt/bin/sha3sum exited with code 0
+pagh:rv64> run /mnt/bin/calc 2+3*4
+14
+run: /mnt/bin/calc exited with code 0
+pagh:rv64> ls /mnt/bin
+paghbox
+echo
+true
+false
+yes
+...
+zcat
+sha3sum
+calc
+base85
+readelf
+uuidgen
+paghfetch
+pagh:rv64>
+```
+
+`ls /mnt/bin` printed **121 unique names**: `paghbox` plus one symlink per
+`commands=` entry (120). `debugfs -R 'ls -l /bin' disk.img` agrees: the
+`paghbox` inode is 891040 bytes and the 120 remaining entries have mode
+`120777` (symlinks), including `sha3sum`, `calc`, `base85`, `readelf`,
+`uuidgen` and `paghfetch`.
+
+```text
+     17  100644 (1)      0      0   891040  1-Jan-1970 03:00 paghbox
+     42  120777 (7)      0      0       7  1-Jan-1970 03:00 uniq
+     ...
+    132  120777 (7)      0      0       7  1-Jan-1970 03:00 sha3sum
+    133  120777 (7)      0      0       7  1-Jan-1970 03:00 calc
+    134  120777 (7)      0      0       7  1-Jan-1970 03:00 base85
+    135  120777 (7)      0      0       7  1-Jan-1970 03:00 readelf
+    136  120777 (7)      0      0       7  1-Jan-1970 03:00 uuidgen
+    137  120777 (7)      0      0       7  1-Jan-1970 03:00 paghfetch
+```
+
+The serial driver drops long output, so the `ls` list above is shown with an
+ellipsis; the 121-line count is from the full serial log, cross-checked against
+`debugfs`. The install itself is unaffected.

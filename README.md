@@ -54,7 +54,7 @@ python3 tools/build_repo.py --check
 ```
 
 `build_repo.py` без аргументов сам вызывает cargo, затем пишет
-`repo/pkg/paghbox-1.7.0.ppkg` и `repo/index`. `--elf PATH` упаковывает готовый
+`repo/pkg/paghbox-1.8.0.ppkg` и `repo/index`. `--elf PATH` упаковывает готовый
 ELF, `--no-build` берёт стандартный путь без cargo, `--check` только
 перечитывает index/пакеты и проверяет magic, длины, манифест, SHA-256, размер
 payload'а и отсутствие «осиротевших» `.ppkg`.
@@ -319,15 +319,16 @@ PASS-строки и таблица: [`docs/live-testing.md`](docs/live-testing.
 | `time`/`nice` | `time echo` → `timed` + `real X.XXXs`, `user/sys 0.000s`, код 0; `time false` → 1; `nice -n 5` → `nice`, без приоритетов |
 | `exit`/`more`/`nm` | `exit 7` → 7, `exit` → 0, `exit 300` → 2; `more -n 3` и `-d` — точные чанки; `nm`, `-D`, `-u`, `-n` — точные строки, не-ELF → 1 |
 | `watch` | `-t -c 2 -n 0` → две ANSI-очистки + `hi`; с заголовком `Every 0s: /mnt/bin/echo hi` |
-| `pkg install` | `pkg: installed paghbox 1.6.0`; 107 симлинков; `/mnt/bin/timeout` и `/mnt/bin/type` работают |
+| `pkg install` | `pkg: installed paghbox 1.8.0`; 120 симлинков; `/mnt/bin/sha3sum` и `/mnt/bin/calc` работают |
 
-В 1.6.0 дополнительно был проверен `pkg install paghbox` на чистом 64 MiB
-ext2 с `repo/` на хосте: `pkg: installed paghbox 1.6.0`, затем
-`run /mnt/bin/timeout 1 /mnt/bin/echo installed` → `installed` и
-`run /mnt/bin/type -v sleep` → `/mnt/bin/sleep`; `debugfs` показывает
-`paghbox` (818936 байт) и 107 симлинков в `/mnt/bin`. Для 1.7.0 отдельный
-`pkg install` не перепроверялся; `build_repo.py --check` подтверждает пакет,
-114 команд и согласованность манифеста, а `MAX_COMMANDS = 160` покрывает 114.
+В 1.8.0 `pkg install paghbox` проверен на чистом 64 MiB ext2 с `repo/` на
+хосте: `pkg: installed paghbox 1.8.0`, затем
+`run /mnt/bin/sha3sum /mnt/abc.txt` → `3a98…1532  /mnt/abc.txt` и
+`run /mnt/bin/calc 2+3*4` → `14`; `debugfs` показывает `paghbox`
+(891040 байт) и 120 симлинков в `/mnt/bin`, а `ls /mnt/bin` — 121 имя.
+`build_repo.py --check` подтверждает пакет, 120 команд и согласованность
+манифеста; `MAX_COMMANDS = 160` покрывает 120. Подробности —
+[`docs/live-1.8.0-pkg-install.txt`](docs/live-1.8.0-pkg-install.txt).
 
 ## Ограничения среды и ABI
 
@@ -477,11 +478,12 @@ ext2 с `repo/` на хосте: `pkg: installed paghbox 1.6.0`, затем
 `target/` и `repo/` в [`.gitignore`](.gitignore): бинарники не коммитятся.
 `repo/` полностью воспроизводится командой `python3 tools/build_repo.py` из
 исходников и пинованного тулчейна; индекс детерминирован по содержимому
-(единственный недетерминизм — сам ELF от rustc). Текущий пакет — 843944
-байта payload / 844839 байт `.ppkg`, 114 команд, SHA-256
-`54bda1f816c3fdd4a0c82f0e9a77e5d3ee4b54146270dd08e961dc0642f24082`; в git
+(единственный недетерминизм — сам ELF от rustc). Текущий пакет — 891040
+байт payload / 891981 байт `.ppkg`, 120 команд, SHA-256
+`94832c9240b1dbeed68708576fa5f73fd9682011512e6f627cf771896e4e83ee`; в git
 он не попал (`.gitignore`), его место — на HTTP-зеркале.
 
-`catalog.md` — ровно 120 уникальных имён; `[x]` стоят у 114 реализованных,
-остальные 6 `[ ]`. Список проверяется `tools/live_test_170.py` и `grep`-ом по
-`NAMES`: все 114 имён входят в `commands=` пакета.
+`catalog.md` — ровно 120 уникальных имён; `[x]` стоят у всех 120
+реализованных, `[ ]` не осталось. Список проверяется
+`tools/live_test_180.py` и `grep`-ом по `NAMES`: все 120 имён входят в
+`commands=` пакета.
