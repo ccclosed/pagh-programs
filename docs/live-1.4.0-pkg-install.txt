@@ -1,0 +1,118 @@
+# paghbox 1.4.0: pkg install and symlink live check
+
+Host: `python3 -m http.server 51679 --bind 127.0.0.1 --directory repo`
+(ephemeral port from the run). Guest: QEMU `virt`, kernel 0.16.1 debug, 64 MiB
+ext2, `--net`; the guest reaches the host as `10.0.2.2:51679`.
+
+Boot 1 installs from the freshly built `repo/`; boot 2 reuses the same disk
+without a NIC and runs two installer-created symlinks.
+
+```text
+==== install ====
+Type 'help' for the command list.
+
+pagh:rv64> pkg repo http://10.0.2.2:51679/
+pkg: repo http://10.0.2.2:51679/
+pagh:rv64> pkg index
+pkg: index 1 package(s)
+pagh:rv64> pkg install paghbox
+pkg: installed paghbox 1.4.0
+pagh:rv64> 
+==== symlink ====
+Type 'help' for the command list.
+
+pagh:rv64> run /mnt/bin/whoami
+root
+run: /mnt/bin/whoami exited with code 0
+pagh:rv64> run /mnt/bin/xxd /mnt/hello.txt
+00000000: 6865 6c6c 6f0a                           hello.
+run: /mnt/bin/xxd exited with code 0
+pagh:rv64> ls /mnt/bin
+paghbox
+echo
+true
+false
+yes
+pwd
+basename
+dirname
+seq
+cat
+wc
+head
+tail
+ls
+stat
+uname
+hostname
+arch
+nproc
+sleep
+uptime
+date
+readlink
+realpath
+uniq
+sort
+nl
+fold
+expand
+unexpand
+rev
+cut
+tr
+comm
+paste
+strings
+hexdump
+grep
+rm
+mkdir
+touch
+cp
+mv
+ln
+truncate
+chmod
+find
+du
+tree
+file
+printf
+expr
+test
+factor
+which
+mktemp
+rmdir
+tac
+sum
+cksum
+base64
+base32
+diff
+cmp
+sed
+awk
+shuf
+numfmt
+whoami
+id
+env
+tee
+split
+csplit
+join
+fmt
+od
+xxd
+uuencode
+uudecode
+curl
+wget
+kill
+pagh:rv64>
+```
+
+`ls /mnt/bin` printed `paghbox` and 82 symlinks (one per `commands=` entry),
+including `whoami`, `xxd`, `curl`, `wget` and `kill`.

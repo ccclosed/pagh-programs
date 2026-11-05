@@ -1,4 +1,235 @@
-# Живой прогон paghbox 1.3.0
+# Живые прогоны paghbox
+
+## 1.4.0 (батч 5)
+
+Дата: 2026-11-05. Ядро: `/home/oleg/pagh-riscv/target/riscv64gc-unknown-none-elf/debug/pagh`
+(main 0.16.1; `run /mnt/paghbox uname -a` в QEMU печатает
+`pagh pagh-riscv 0.10.0 0.16.1 riscv64`). QEMU `qemu-system-riscv64` 10.2.2,
+машина `virt`, 256 MiB, serial на Unix-сокете, `-bios default`, modern virtio
+(`-global virtio-mmio.force-legacy=false`). Диск: 64 MiB ext2, создан на хосте
+`mke2fs -q -t ext2 -F -b 4096 -d rootfs disk.img 64M`; в корне — `paghbox`
+1.4.0 и фикстуры.
+
+Драйвер — [`tools/live_test_140.py`](../tools/live_test_140.py): **21 загрузка
+по 2–4 команды**, после каждой проверялись вывод и
+`run: /mnt/paghbox exited with code N`. Сетевые группы запускались с `--net`
+против `python3 -m http.server` на хосте (`10.0.2.2:<port>`). Итог:
+**72 PASS, 0 FAIL**; все 15 новых applet'ов проверены функционально.
+
+Сырой транскрипт: [`live-1.4.0-transcript.txt`](live-1.4.0-transcript.txt).
+Отдельно: [`live-1.4.0-pkg-install.txt`](live-1.4.0-pkg-install.txt)
+(`pkg install paghbox`, 82 симлинка).
+
+### Итог 1.4.0
+
+* `whoami`/`id` — фиксированная identity `root` (uid/gid syscall в ABI нет),
+  варианты `-u`, `-g`, `-G` и `-u -g`; `env` — `PWD=/mnt` из `envp`.
+* `tee` — `-i FILE` (расширение из-за отсутствия пайпов/редиректа), несколько
+  выходных файлов, `-a`; байты идут и в stdout.
+* `split` — `-l 2` (части 2/2/1 строки) и `-b 4 -d` (три части, проверено
+  `xxd`); `csplit` — `/SECTION/`, номер `3`, `-f`, `-n 3`, `-s`; `join` —
+  whitespace и `-1 2 -2 1 -t :`; `fmt` — `-w 20` и `-s`.
+* `od` — `-A x|d|o`, `-t x1|o1|c` с 16-байтными строками и финальным offset;
+  `xxd` — дамп, `-l`, `-s`, `-r`; `uuencode`/`uudecode` — classic-формат,
+  декодирование в файл и `-o -`.
+* `curl` — тело, `-i` (заголовки + тело), `-o`; `wget` — basename, `-O`,
+  summary; 404 и `Connection refused` → exit 1.
+* `kill` — `-0 0 0` (несколько pid), `ESRCH` → `No such process`, неизвестный
+  сигнал → exit 2.
+* `pkg install` (опционально) — `paghbox 1.4.0`, затем `run /mnt/bin/whoami` →
+  `root` и `run /mnt/bin/xxd /mnt/hello.txt` → корректный дамп; `ls /mnt/bin`
+  показывает `paghbox` + 82 симлинка.
+
+### PASS-строки 1.4.0
+
+```text
+PASS whoami: run /mnt/paghbox whoami
+PASS id: run /mnt/paghbox id
+PASS id -u: run /mnt/paghbox id -u
+PASS uname -a: run /mnt/paghbox uname -a
+PASS id -g: run /mnt/paghbox id -g
+PASS id -G: run /mnt/paghbox id -G
+PASS id -u -g: run /mnt/paghbox id -u -g
+PASS env: run /mnt/paghbox env
+PASS env operand: run /mnt/paghbox env extra
+PASS env option: run /mnt/paghbox env -i
+PASS tee files: run /mnt/paghbox tee -i /mnt/tee_in.txt /mnt/tee_out.txt /mnt/tee_out2.txt
+PASS tee out1: run /mnt/paghbox cat /mnt/tee_out.txt
+PASS tee out2: run /mnt/paghbox cat /mnt/tee_out2.txt
+PASS tee -a: run /mnt/paghbox tee -a -i /mnt/tee_in.txt /mnt/tee_append.txt
+PASS tee -a cat: run /mnt/paghbox cat /mnt/tee_append.txt
+PASS split -l: run /mnt/paghbox split -l 2 /mnt/split.txt /mnt/sp
+PASS split aa: run /mnt/paghbox cat /mnt/spaa
+PASS split ab: run /mnt/paghbox cat /mnt/spab
+PASS split ac: run /mnt/paghbox cat /mnt/spac
+PASS split -b -d: run /mnt/paghbox split -b 4 -d /mnt/bytes.bin /mnt/b
+PASS split b00: run /mnt/paghbox xxd /mnt/b00
+PASS split b01: run /mnt/paghbox xxd /mnt/b01
+PASS split b02: run /mnt/paghbox xxd /mnt/b02
+PASS csplit /RE/ -s: run /mnt/paghbox csplit -s -f /mnt/cs /mnt/csplit.txt /SECTION/
+PASS csplit cs00: run /mnt/paghbox cat /mnt/cs00
+PASS csplit cs01: run /mnt/paghbox cat /mnt/cs01
+PASS csplit 3 -n3: run /mnt/paghbox csplit -f /mnt/cn -n 3 /mnt/csplit.txt 3
+PASS csplit cn000: run /mnt/paghbox cat /mnt/cn000
+PASS csplit cn001: run /mnt/paghbox cat /mnt/cn001
+PASS join default: run /mnt/paghbox join /mnt/j1 /mnt/j2
+PASS join -t -1 -2: run /mnt/paghbox join -1 2 -2 1 -t : /mnt/j3 /mnt/j4
+PASS join missing: run /mnt/paghbox join /mnt/j1 /mnt/nope
+PASS fmt -w20: run /mnt/paghbox fmt -w 20 /mnt/fmt.txt
+PASS fmt -s -w20: run /mnt/paghbox fmt -s -w 20 /mnt/fmt.txt
+PASS fmt bad width: run /mnt/paghbox fmt -w 0 /mnt/fmt.txt
+PASS od x x1: run /mnt/paghbox od -A x -t x1 /mnt/hello.txt
+PASS od d c: run /mnt/paghbox od -A d -t c /mnt/hello.txt
+PASS od o o1: run /mnt/paghbox od -A o -t o1 /mnt/hello.txt
+PASS xxd dump: run /mnt/paghbox xxd /mnt/hello.txt
+PASS xxd -l -s: run /mnt/paghbox xxd -l 4 -s 1 /mnt/hello.txt
+PASS xxd -r: run /mnt/paghbox xxd -r /mnt/hello.hex
+PASS uuencode: run /mnt/paghbox uuencode /mnt/hello.txt hello.txt
+PASS uudecode -o: run /mnt/paghbox uudecode -o /mnt/udec.txt /mnt/hello.uu
+PASS udec cat: run /mnt/paghbox cat /mnt/udec.txt
+PASS uudecode stdout: run /mnt/paghbox uudecode -o - /mnt/hello.uu
+PASS kill -0 self x2: run /mnt/paghbox kill -0 0 0
+PASS kill -0 missing: run /mnt/paghbox kill -0 999999
+PASS kill bad signal: run /mnt/paghbox kill -BOGUS 0
+PASS kill -TERM missing: run /mnt/paghbox kill -TERM 999999
+PASS whoami usage: run /mnt/paghbox whoami x
+PASS id usage: run /mnt/paghbox id x
+PASS tee usage: run /mnt/paghbox tee -z
+PASS split usage: run /mnt/paghbox split -z
+PASS csplit usage: run /mnt/paghbox csplit
+PASS join usage: run /mnt/paghbox join
+PASS od usage: run /mnt/paghbox od -A q
+PASS uuencode usage: run /mnt/paghbox uuencode
+PASS uudecode usage: run /mnt/paghbox uudecode -z
+PASS xxd usage: run /mnt/paghbox xxd -z
+PASS curl bad scheme: run /mnt/paghbox curl https://10.0.2.2/x
+PASS wget hostname: run /mnt/paghbox wget http://example.com/x
+PASS curl body: run /mnt/paghbox curl http://10.0.2.2:50247/demo.txt
+PASS curl -i: run /mnt/paghbox curl -i http://10.0.2.2:50247/demo.txt
+PASS curl -o: run /mnt/paghbox curl -o /mnt/c.out http://10.0.2.2:50247/demo.txt
+PASS curl file: run /mnt/paghbox cat /mnt/c.out
+PASS wget default: run /mnt/paghbox wget http://10.0.2.2:50247/demo.txt
+PASS wget file: run /mnt/paghbox cat /mnt/demo.txt
+PASS wget -O: run /mnt/paghbox wget -O /mnt/w.out http://10.0.2.2:50247/demo.txt
+PASS wget -O file: run /mnt/paghbox cat /mnt/w.out
+PASS curl 404: run /mnt/paghbox curl http://10.0.2.2:50247/missing.txt
+PASS wget 404: run /mnt/paghbox wget http://10.0.2.2:50247/missing.txt
+PASS curl refused: run /mnt/paghbox curl http://10.0.2.2:1/x
+```
+
+### Показательные выводы 1.4.0
+
+```text
+run /mnt/paghbox whoami
+root
+run: /mnt/paghbox exited with code 0
+
+run /mnt/paghbox id
+uid=0 gid=0(root) groups=0(root)
+
+run /mnt/paghbox uname -a
+pagh pagh-riscv 0.10.0 0.16.1 riscv64
+
+run /mnt/paghbox tee -i /mnt/tee_in.txt /mnt/tee_out.txt /mnt/tee_out2.txt
+tee input line
+run: /mnt/paghbox exited with code 0
+
+run /mnt/paghbox split -l 2 /mnt/split.txt /mnt/sp
+run: /mnt/paghbox exited with code 0
+# cat /mnt/spaa → one/two; spab → three/four; spac → five
+
+run /mnt/paghbox csplit -s -f /mnt/cs /mnt/csplit.txt /SECTION/
+run: /mnt/paghbox exited with code 0
+# cat /mnt/cs00 → alpha/beta; cs01 → SECTION/gamma/delta
+
+run /mnt/paghbox join -1 2 -2 1 -t : /mnt/j3 /mnt/j4
+1:x:p
+4:d:r
+
+run /mnt/paghbox fmt -w 20 /mnt/fmt.txt
+The quick brown fox
+jumps over the lazy
+dog and keeps on
+running. A short
+second line here.
+
+A separate paragraph
+follows with a few
+words.
+
+run /mnt/paghbox od -A x -t x1 /mnt/hello.txt
+000000 68 65 6c 6c 6f 0a
+000006
+
+run /mnt/paghbox xxd /mnt/hello.txt
+00000000: 6865 6c6c 6f0a                           hello.
+
+run /mnt/paghbox uuencode /mnt/hello.txt hello.txt
+begin 644 hello.txt
+&:&5L;&\*
+end
+
+run /mnt/paghbox curl http://10.0.2.2:50247/demo.txt
+network ok
+
+run /mnt/paghbox curl -i http://10.0.2.2:50247/demo.txt
+HTTP/1.0 200 OK
+Server: SimpleHTTP/0.6 Python/3.14.7
+Date: Thu, 05 Nov 2026 20:51:24 GMT
+Content-type: text/plain
+Content-Length: 11
+
+network ok
+
+run /mnt/paghbox wget -O /mnt/w.out http://10.0.2.2:50247/demo.txt
+wget: saved /mnt/w.out (11 bytes)
+
+run /mnt/paghbox kill -0 0 0
+run: /mnt/paghbox exited with code 0
+
+run /mnt/paghbox kill -TERM 999999
+kill: 999999: No such process
+run: /mnt/paghbox exited with code 1
+```
+
+### `pkg install` 1.4.0 (опционально)
+
+`repo/` отдан `python3 -m http.server <port> --bind 127.0.0.1 -d repo`; гость
+видит хост как `10.0.2.2:<port>` (QEMU `--net`, kernel 0.16.1):
+
+```text
+pagh:rv64> pkg repo http://10.0.2.2:42661/
+pkg: repo http://10.0.2.2:42661/
+pagh:rv64> pkg index
+pkg: index 1 package(s)
+pagh:rv64> pkg install paghbox
+pkg: installed paghbox 1.4.0
+pagh:rv64> run /mnt/bin/whoami
+root
+pagh:rv64> run /mnt/bin/xxd /mnt/hello.txt
+00000000: 6865 6c6c 6f0a                           hello.
+```
+
+`ls /mnt/bin` показывает `paghbox` и 82 симлинка; `MAX_COMMANDS = 160`
+покрывает bundle.
+
+### Чем проверка 1.4.0 ограничена
+
+* Шелл ядра по-прежнему не понимает кавычки, пайпы и редиректы. Поэтому
+  `tee` читает файл через `-i FILE`, а `uuencode`/`uudecode` проверены через
+  файлы; stdin-ветки (кроме `-i -`) живым запуском недоступны.
+* У консольного fd 0 нет EOF, поэтому любой фильтр без файлового операнда
+  ждёт ввод вечно — это свойство среды, а не заглушка.
+* `curl`/`wget` — только `http://` + IPv4-литерал; DNS/TLS/редиректов нет,
+  HTTP/1.0 с `Connection: close`.
+* `kill` адресует только потоки своего процесса; чужой pid даёт ESRCH, а
+  `libpagh` не имеет ESRCH в таблице errno (печатается `No such process`).
+* Serial-драйвер иногда теряет длинную очередь ввода; драйвер делает 2–4
+  команды на загрузку и один retry на свежем образе.
+* `pkg install` проверялся отдельно (см. выше); основной прогон использует
+  `run /mnt/paghbox`, чтобы не смешивать applet'ы и сеть.
+
+## 1.3.0 (история)
 
 Дата: 2026-11-05. Ядро: `/home/oleg/pagh-riscv/target/riscv64gc-unknown-none-elf/debug/pagh`
 (main 0.16.0; `uname -a` в этом билде печатает
@@ -13,7 +244,7 @@
 
 Сырой транскрипт: [`live-1.3.0-transcript.txt`](live-1.3.0-transcript.txt).
 
-## Итог
+### Итог
 
 **50 PASS, 0 FAIL.** Все 12 новых applet'ов проверены функционально, включая
 коды выхода 0/1/2:
@@ -29,7 +260,7 @@
 * Серия сделана финальным бинарником 1.3.0; `sed s/a*/X/g` проверяет
   подавление пустого матча после непустого, чтобы результат совпадал с GNU.
 
-## PASS-строки
+### PASS-строки
 
 ```text
 PASS uname: run /mnt/paghbox uname -a
@@ -84,7 +315,7 @@ PASS sum missing: run /mnt/paghbox sum /mnt/nope
 PASS shuf bad range: run /mnt/paghbox shuf -i 5-1
 ```
 
-## Показательные выводы
+### Показательные выводы
 
 ```text
 run /mnt/paghbox rmdir -p p1/p2/p3          # cwd=/mnt
@@ -161,7 +392,7 @@ run /mnt/paghbox numfmt --to=si --suffix=B --padding=8 1000
    1.0kB
 ```
 
-## `pkg install` на 0.16.0 (опционально)
+### `pkg install` на 0.16.0 (опционально)
 
 Отдельная загрузка с `--net` и чистым 64 MiB ext2: `repo/` отдан
 `python3 -m http.server 8000 --bind 127.0.0.1 -d repo`; гость видит хост как
@@ -194,7 +425,7 @@ run: /mnt/bin/numfmt exited with code 0
 `numfmt`. `MAX_COMMANDS = 160` покрывает пакет; SHA-256 и размер в `index`
 проверены установщиком до записи.
 
-## Чем проверка ограничена
+### Чем проверка ограничена
 
 * Шелл ядра не понимает кавычки, пайпы и редиректы; `awk`-программа с
   пробелами недоступна, поэтому использованы компактные `{print$1,$2}` и

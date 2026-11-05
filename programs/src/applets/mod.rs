@@ -14,6 +14,8 @@ pub mod basename;
 mod bre;
 pub mod cat;
 pub mod chmod;
+pub mod csplit;
+pub mod curl;
 pub mod cksum;
 pub mod cmp;
 mod codec;
@@ -25,25 +27,32 @@ pub mod diff;
 pub mod dirname;
 pub mod du;
 pub mod echo;
+pub mod env;
 pub mod expand;
 pub mod expr;
 pub mod factor;
 pub mod false_applet;
 pub mod file;
 pub mod find;
+pub mod fmt;
 pub mod fold;
 pub mod grep;
 pub mod head;
 pub mod hexdump;
 pub mod hostname;
+mod httpc;
+pub mod id;
 pub mod ln;
 pub mod ls;
 pub mod mkdir;
+pub mod join;
+pub mod kill;
 pub mod mktemp;
 pub mod mv;
 pub mod nl;
 pub mod nproc;
 pub mod numfmt;
+pub mod od;
 pub mod paste;
 pub mod printf;
 pub mod pwd;
@@ -56,12 +65,14 @@ pub mod sed;
 pub mod seq;
 pub mod shuf;
 pub mod sleep;
+pub mod split;
 pub mod sort;
 pub mod stat;
 pub mod strings;
 pub mod sum;
 pub mod tac;
 pub mod tail;
+pub mod tee;
 pub mod test;
 pub mod touch;
 pub mod tr;
@@ -72,8 +83,14 @@ pub mod uname;
 pub mod unexpand;
 pub mod uniq;
 pub mod uptime;
+mod uu;
+pub mod uudecode;
+pub mod uuencode;
 pub mod wc;
+pub mod wget;
+pub mod whoami;
 pub mod which;
+pub mod xxd;
 pub mod yes;
 
 /// Every applet in the bundle. `tools/build_repo.py` parses this list to build
@@ -146,6 +163,21 @@ pub const NAMES: &[&str] = &[
     "awk",
     "shuf",
     "numfmt",
+    "whoami",
+    "id",
+    "env",
+    "tee",
+    "split",
+    "csplit",
+    "join",
+    "fmt",
+    "od",
+    "xxd",
+    "uuencode",
+    "uudecode",
+    "curl",
+    "wget",
+    "kill",
 ];
 
 /// Run an applet by name; `None` means "no such applet".
@@ -219,6 +251,21 @@ pub fn dispatch(name: &str, args: &[String]) -> Option<i32> {
         "awk" => awk::run(args),
         "shuf" => shuf::run(args),
         "numfmt" => numfmt::run(args),
+        "whoami" => whoami::run(args),
+        "id" => id::run(args),
+        "env" => env::run(args),
+        "tee" => tee::run(args),
+        "split" => split::run(args),
+        "csplit" => csplit::run(args),
+        "join" => join::run(args),
+        "fmt" => fmt::run(args),
+        "od" => od::run(args),
+        "xxd" => xxd::run(args),
+        "uuencode" => uuencode::run(args),
+        "uudecode" => uudecode::run(args),
+        "curl" => curl::run(args),
+        "wget" => wget::run(args),
+        "kill" => kill::run(args),
         _ => return None,
     })
 }

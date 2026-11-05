@@ -1,0 +1,295 @@
+# paghbox 1.4.0 live transcript (21 boots)
+
+===== boot 1: identity =====
+pagh:rv64> run /mnt/paghbox whoami
+root
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox id
+uid=0 gid=0(root) groups=0(root)
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox id -u
+0
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox uname -a
+pagh pagh-riscv 0.10.0 0.16.1 riscv64
+run: /mnt/paghbox exited with code 0
+
+===== boot 2: identity options =====
+pagh:rv64> run /mnt/paghbox id -g
+0
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox id -G
+0
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox id -u -g
+0 0
+run: /mnt/paghbox exited with code 0
+
+===== boot 3: environment =====
+pagh:rv64> run /mnt/paghbox env
+PWD=/mnt
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox env extra
+usage: env
+run: /mnt/paghbox exited with code 2
+pagh:rv64> run /mnt/paghbox env -i
+usage: env
+run: /mnt/paghbox exited with code 2
+
+===== boot 4: tee multiple =====
+pagh:rv64> run /mnt/paghbox tee -i /mnt/tee_in.txt /mnt/tee_out.txt /mnt/tee_out2.txt
+tee input line
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox cat /mnt/tee_out.txt
+tee input line
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox cat /mnt/tee_out2.txt
+tee input line
+run: /mnt/paghbox exited with code 0
+
+===== boot 5: tee append =====
+pagh:rv64> run /mnt/paghbox tee -a -i /mnt/tee_in.txt /mnt/tee_append.txt
+tee input line
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox cat /mnt/tee_append.txt
+prefix
+tee input line
+run: /mnt/paghbox exited with code 0
+
+===== boot 6: split lines =====
+pagh:rv64> run /mnt/paghbox split -l 2 /mnt/split.txt /mnt/sp
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox cat /mnt/spaa
+one
+two
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox cat /mnt/spab
+three
+four
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox cat /mnt/spac
+five
+run: /mnt/paghbox exited with code 0
+
+===== boot 7: split bytes =====
+pagh:rv64> run /mnt/paghbox split -b 4 -d /mnt/bytes.bin /mnt/b
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox xxd /mnt/b00
+00000000: 6162 6364                                abcd
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox xxd /mnt/b01
+00000000: 6566 6768                                efgh
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox xxd /mnt/b02
+00000000: 696a 0a                                  ij.
+run: /mnt/paghbox exited with code 0
+
+===== boot 8: csplit regex =====
+pagh:rv64> run /mnt/paghbox csplit -s -f /mnt/cs /mnt/csplit.txt /SECTION/
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox cat /mnt/cs00
+alpha
+beta
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox cat /mnt/cs01
+SECTION
+gamma
+delta
+run: /mnt/paghbox exited with code 0
+
+===== boot 9: csplit line -n =====
+pagh:rv64> run /mnt/paghbox csplit -f /mnt/cn -n 3 /mnt/csplit.txt 3
+11
+20
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox cat /mnt/cn000
+alpha
+beta
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox cat /mnt/cn001
+SECTION
+gamma
+delta
+run: /mnt/paghbox exited with code 0
+
+===== boot 10: join =====
+pagh:rv64> run /mnt/paghbox join /mnt/j1 /mnt/j2
+a 1 A
+d 4 D
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox join -1 2 -2 1 -t : /mnt/j3 /mnt/j4
+1:x:p
+4:d:r
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox join /mnt/j1 /mnt/nope
+join: /mnt/nope: No such file or directory
+run: /mnt/paghbox exited with code 1
+
+===== boot 11: fmt =====
+pagh:rv64> run /mnt/paghbox fmt -w 20 /mnt/fmt.txt
+The quick brown fox
+jumps over the lazy
+dog and keeps on
+running. A short
+second line here.
+
+A separate paragraph
+follows with a few
+words.
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox fmt -s -w 20 /mnt/fmt.txt
+The quick brown fox
+jumps over the lazy
+dog and keeps on
+running.
+A short second line
+here.
+
+A separate paragraph
+follows with a few
+words.
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox fmt -w 0 /mnt/fmt.txt
+fmt: invalid width: '0'
+run: /mnt/paghbox exited with code 2
+
+===== boot 12: od =====
+pagh:rv64> run /mnt/paghbox od -A x -t x1 /mnt/hello.txt
+000000 68 65 6c 6c 6f 0a
+000006
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox od -A d -t c /mnt/hello.txt
+0000000   h   e   l   l   o  \n
+0000006
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox od -A o -t o1 /mnt/hello.txt
+0000000 150 145 154 154 157 012
+0000006
+run: /mnt/paghbox exited with code 0
+
+===== boot 13: xxd =====
+pagh:rv64> run /mnt/paghbox xxd /mnt/hello.txt
+00000000: 6865 6c6c 6f0a                           hello.
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox xxd -l 4 -s 1 /mnt/hello.txt
+00000001: 656c 6c6f                                ello
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox xxd -r /mnt/hello.hex
+hello
+run: /mnt/paghbox exited with code 0
+
+===== boot 14: uuencode/uudecode =====
+pagh:rv64> run /mnt/paghbox uuencode /mnt/hello.txt hello.txt
+begin 644 hello.txt
+&:&5L;&\*
+end
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox uudecode -o /mnt/udec.txt /mnt/hello.uu
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox cat /mnt/udec.txt
+hello
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox uudecode -o - /mnt/hello.uu
+hello
+run: /mnt/paghbox exited with code 0
+
+===== boot 15: kill signals =====
+pagh:rv64> run /mnt/paghbox kill -0 0 0
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox kill -0 999999
+kill: 999999: No such process
+run: /mnt/paghbox exited with code 1
+pagh:rv64> run /mnt/paghbox kill -BOGUS 0
+kill: invalid signal: 'BOGUS'
+run: /mnt/paghbox exited with code 2
+pagh:rv64> run /mnt/paghbox kill -TERM 999999
+kill: 999999: No such process
+run: /mnt/paghbox exited with code 1
+
+===== boot 16: usage identity/files =====
+pagh:rv64> run /mnt/paghbox whoami x
+usage: whoami
+run: /mnt/paghbox exited with code 2
+pagh:rv64> run /mnt/paghbox id x
+usage: id [-u] [-g] [-G]
+run: /mnt/paghbox exited with code 2
+pagh:rv64> run /mnt/paghbox tee -z
+usage: tee [-a] [-i FILE] [FILE...]
+run: /mnt/paghbox exited with code 2
+pagh:rv64> run /mnt/paghbox split -z
+usage: split [-l N] [-b N] [-d] [FILE [PREFIX]]
+run: /mnt/paghbox exited with code 2
+
+===== boot 17: usage text =====
+pagh:rv64> run /mnt/paghbox csplit
+usage: csplit [-s] [-f PREFIX] [-n N] FILE PATTERN...
+run: /mnt/paghbox exited with code 2
+pagh:rv64> run /mnt/paghbox join
+usage: join [-1 N] [-2 N] [-t CHAR] FILE1 FILE2
+run: /mnt/paghbox exited with code 2
+pagh:rv64> run /mnt/paghbox od -A q
+od: invalid offset radix: 'q'
+run: /mnt/paghbox exited with code 2
+pagh:rv64> run /mnt/paghbox uuencode
+usage: uuencode [FILE] NAME
+run: /mnt/paghbox exited with code 2
+
+===== boot 18: usage codecs/network =====
+pagh:rv64> run /mnt/paghbox uudecode -z
+usage: uudecode [-o FILE] [FILE]
+run: /mnt/paghbox exited with code 2
+pagh:rv64> run /mnt/paghbox xxd -z
+usage: xxd [-r] [-l N] [-s OFF] [FILE]
+run: /mnt/paghbox exited with code 2
+pagh:rv64> run /mnt/paghbox curl https://10.0.2.2/x
+curl: unsupported URL: 'https://10.0.2.2/x'
+run: /mnt/paghbox exited with code 2
+pagh:rv64> run /mnt/paghbox wget http://example.com/x
+wget: unsupported URL: 'http://example.com/x'
+run: /mnt/paghbox exited with code 2
+
+===== boot 19: curl network =====
+pagh:rv64> run /mnt/paghbox curl http://10.0.2.2:50247/demo.txt
+network ok
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox curl -i http://10.0.2.2:50247/demo.txt
+HTTP/1.0 200 OK
+Server: SimpleHTTP/0.6 Python/3.14.7
+Date: Thu, 05 Nov 2026 20:51:24 GMT
+Content-type: text/plain
+Content-Length: 11
+Last-Modified: Thu, 05 Nov 2026 20:49:17 GMT
+
+network ok
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox curl -o /mnt/c.out http://10.0.2.2:50247/demo.txt
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox cat /mnt/c.out
+network ok
+run: /mnt/paghbox exited with code 0
+
+===== boot 20: wget network =====
+pagh:rv64> run /mnt/paghbox wget http://10.0.2.2:50247/demo.txt
+wget: saved demo.txt (11 bytes)
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox cat /mnt/demo.txt
+network ok
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox wget -O /mnt/w.out http://10.0.2.2:50247/demo.txt
+wget: saved /mnt/w.out (11 bytes)
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox cat /mnt/w.out
+network ok
+run: /mnt/paghbox exited with code 0
+
+===== boot 21: network errors =====
+pagh:rv64> run /mnt/paghbox curl http://10.0.2.2:50247/missing.txt
+curl: HTTP 404 File not found
+run: /mnt/paghbox exited with code 1
+pagh:rv64> run /mnt/paghbox wget http://10.0.2.2:50247/missing.txt
+wget: HTTP 404 File not found
+run: /mnt/paghbox exited with code 1
+pagh:rv64> run /mnt/paghbox curl http://10.0.2.2:1/x
+curl: connect: Connection refused
+run: /mnt/paghbox exited with code 1
+
