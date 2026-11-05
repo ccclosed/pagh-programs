@@ -14,7 +14,7 @@ catalog.md                 целевые 120 программ и честный
 docs/package-format.md     формат .ppkg и index (контракт с ядром)
 programs/                  crate paghbox: dispatch + applets/
   src/main.rs              argv[0]/`paghbox <applet>` + exit codes
-  src/util.rs              EAGAIN-retry чтение, Input, вывод
+  src/util.rs              EAGAIN-retry, Input, which/spawn/wait, duration
   src/applets/             107 модулей: echo true false yes pwd basename dirname seq
                            cat wc head tail ls stat uname hostname arch nproc sleep
                            uptime date readlink realpath uniq sort nl fold expand
