@@ -49,7 +49,7 @@ pub fn run(args: &[String]) -> i32 {
                     return util::EXIT_USAGE;
                 };
                 index += 1;
-                match parse_signal(value) {
+                match util::parse_signal(value) {
                     Some(parsed) => signal = parsed,
                     None => {
                         eprintln!("kill: invalid signal: '{value}'");
@@ -57,7 +57,7 @@ pub fn run(args: &[String]) -> i32 {
                     }
                 }
             } else {
-                match parse_signal(spec) {
+                match util::parse_signal(spec) {
                     Some(parsed) => signal = parsed,
                     None => {
                         eprintln!("kill: invalid signal: '{spec}'");
@@ -114,30 +114,4 @@ pub fn run(args: &[String]) -> i32 {
         }
     }
     status
-}
-
-fn parse_signal(text: &str) -> Option<i32> {
-    if !text.is_empty() && text.bytes().all(|byte| byte.is_ascii_digit()) {
-        let number = text.parse::<i32>().ok()?;
-        if (0..=64).contains(&number) {
-            return Some(number);
-        }
-        return None;
-    }
-    let upper = text.to_ascii_uppercase();
-    let name = upper.strip_prefix("SIG").unwrap_or(&upper);
-    match name {
-        "HUP" => Some(sys::SIGHUP),
-        "INT" => Some(sys::SIGINT),
-        "QUIT" => Some(sys::SIGQUIT),
-        "KILL" => Some(sys::SIGKILL),
-        "USR1" => Some(sys::SIGUSR1),
-        "USR2" => Some(sys::SIGUSR2),
-        "ALRM" => Some(sys::SIGALRM),
-        "TERM" => Some(sys::SIGTERM),
-        "CHLD" => Some(sys::SIGCHLD),
-        "CONT" => Some(sys::SIGCONT),
-        "STOP" => Some(sys::SIGSTOP),
-        _ => None,
-    }
 }

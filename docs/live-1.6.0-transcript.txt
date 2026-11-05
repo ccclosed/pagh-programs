@@ -1,0 +1,277 @@
+# paghbox 1.6.0 live transcript (23 boots)
+
+===== boot 1: timeout success =====
+pagh:rv64> run /mnt/paghbox timeout 1 sleep 0.2
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox timeout 2 /mnt/paghbox echo timed-ok
+timed-ok
+run: /mnt/paghbox exited with code 0
+
+===== boot 2: timeout deadline =====
+pagh:rv64> run /mnt/paghbox timeout 0.1 sleep 2
+run: /mnt/paghbox exited with code 124
+pagh:rv64> run /mnt/paghbox timeout -s KILL 0.1 sleep 2
+run: /mnt/paghbox exited with code 124
+pagh:rv64> run /mnt/paghbox timeout -s 9 0.1 sleep 2
+run: /mnt/paghbox exited with code 124
+
+===== boot 3: timeout errors =====
+pagh:rv64> run /mnt/paghbox timeout 1 /mnt/nope
+timeout: /mnt/nope: not found
+run: /mnt/paghbox exited with code 127
+pagh:rv64> run /mnt/paghbox timeout bogus /mnt/bin/echo hi
+timeout: invalid time interval: 'bogus'
+run: /mnt/paghbox exited with code 2
+pagh:rv64> run /mnt/paghbox timeout -s BOGUS 1 /mnt/bin/echo hi
+usage: timeout [-s SIG] DURATION COMMAND [ARG...]
+run: /mnt/paghbox exited with code 2
+
+===== boot 4: xargs batching =====
+pagh:rv64> run /mnt/paghbox xargs -a /mnt/tokens.txt -n 2 echo
+alpha beta
+gamma delta
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox xargs -a /mnt/tokens.txt -I{} echo pre-{}-post
+pre-alpha-post
+pre-beta-post
+pre-gamma-post
+pre-delta-post
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox xargs -a /mnt/empty.txt -r echo
+run: /mnt/paghbox exited with code 0
+
+===== boot 5: xargs default and errors =====
+pagh:rv64> run /mnt/paghbox xargs -a /mnt/tokens.txt
+alpha beta gamma delta
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox xargs -a /mnt/tokens.txt /mnt/nope
+xargs: /mnt/nope: not found
+run: /mnt/paghbox exited with code 124
+pagh:rv64> run /mnt/paghbox xargs -a /mnt/tokens.txt -n 1 /mnt/bin/false
+run: /mnt/paghbox exited with code 123
+
+===== boot 6: parallel sequential =====
+pagh:rv64> run /mnt/paghbox parallel -j 2 -a /mnt/tokens.txt /mnt/bin/echo
+alpha
+beta
+gamma
+delta
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox parallel -a /mnt/tokens.txt
+alpha
+beta
+gamma
+delta
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox parallel -j 0 -a /mnt/tokens.txt echo
+parallel: invalid job count: '0'
+run: /mnt/paghbox exited with code 2
+
+===== boot 7: install create =====
+pagh:rv64> run /mnt/paghbox install -D -m 600 /mnt/install_src.txt /mnt/inst/new/copy.txt
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox cat /mnt/inst/new/copy.txt
+install me
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox install -m 600 /mnt/install_src.txt /mnt/inst/new/copy.txt
+install: /mnt/inst/new/copy.txt: File exists
+run: /mnt/paghbox exited with code 1
+
+===== boot 8: install force =====
+pagh:rv64> run /mnt/paghbox install -m 644 /mnt/install_src.txt /mnt/ow.txt
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox install -f -m 644 /mnt/install_src.txt /mnt/ow.txt
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox cat /mnt/ow.txt
+install me
+run: /mnt/paghbox exited with code 0
+
+===== boot 9: install usage =====
+pagh:rv64> run /mnt/paghbox install -m 999 /mnt/install_src.txt /mnt/x
+install: invalid mode: '999'
+run: /mnt/paghbox exited with code 2
+pagh:rv64> run /mnt/paghbox install /mnt/install_src.txt
+usage: install [-m MODE] [-D] [-f] SOURCE... DEST
+run: /mnt/paghbox exited with code 2
+pagh:rv64> run /mnt/paghbox install -z /mnt/install_src.txt /mnt/x
+usage: install [-m MODE] [-D] [-f] SOURCE... DEST
+run: /mnt/paghbox exited with code 2
+
+===== boot 10: shred pattern and remove =====
+pagh:rv64> run /mnt/paghbox shred -n 1 -s 10 /mnt/shred.txt
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox cat /mnt/shred.txt
+gMM30WS\7A
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox shred -u -n 1 /mnt/shred_del.txt
+run: /mnt/paghbox exited with code 0
+
+===== boot 11: shred removal =====
+pagh:rv64> run /mnt/paghbox shred -u -n 1 /mnt/shred_del.txt
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox cat /mnt/shred_del.txt
+cat: /mnt/shred_del.txt: No such file or directory
+run: /mnt/paghbox exited with code 1
+pagh:rv64> run /mnt/paghbox shred -n 1 -s 10 -z /mnt/shred.txt
+run: /mnt/paghbox exited with code 0
+
+===== boot 12: shred zero dump =====
+pagh:rv64> run /mnt/paghbox shred -n 1 -s 10 -z /mnt/shred.txt
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox xxd /mnt/shred.txt
+00000000: 0000 0000 0000 0000 0000 0a              ...........
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox shred -n x /mnt/shred.txt
+shred: invalid pass count: 'x'
+run: /mnt/paghbox exited with code 2
+
+===== boot 13: command modes =====
+pagh:rv64> run /mnt/paghbox command -v sleep
+/mnt/bin/sleep
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox command -V echo
+echo is /mnt/bin/echo
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox command echo direct
+direct
+run: /mnt/paghbox exited with code 0
+
+===== boot 14: command nested and errors =====
+pagh:rv64> run /mnt/paghbox command /mnt/paghbox echo nested
+nested
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox command /mnt/nope
+command: /mnt/nope: not found
+run: /mnt/paghbox exited with code 127
+pagh:rv64> run /mnt/paghbox command -v /mnt/nope
+run: /mnt/paghbox exited with code 1
+
+===== boot 15: command usage =====
+pagh:rv64> run /mnt/paghbox command
+usage: command [-v|-V] COMMAND [ARG...]
+run: /mnt/paghbox exited with code 2
+pagh:rv64> run /mnt/paghbox command -z
+usage: command [-v|-V] COMMAND [ARG...]
+run: /mnt/paghbox exited with code 2
+pagh:rv64> run /mnt/paghbox command -v
+usage: command [-v|-V] COMMAND [ARG...]
+run: /mnt/paghbox exited with code 2
+
+===== boot 16: type alias =====
+pagh:rv64> run /mnt/paghbox type sleep
+sleep is /mnt/bin/sleep
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox type -v echo
+/mnt/bin/echo
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox type -V missing
+type: missing: not found
+run: /mnt/paghbox exited with code 1
+
+===== boot 17: time measurements =====
+pagh:rv64> run /mnt/paghbox time /mnt/bin/echo timed
+timed
+real 0.050s
+user 0.000s
+sys 0.000s
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox time /mnt/bin/false
+real 0.040s
+user 0.000s
+sys 0.000s
+run: /mnt/paghbox exited with code 1
+pagh:rv64> run /mnt/paghbox time /mnt/nope
+real 0.000s
+user 0.000s
+sys 0.000s
+time: /mnt/nope: not found
+run: /mnt/paghbox exited with code 127
+
+===== boot 18: nice no-op =====
+pagh:rv64> run /mnt/paghbox nice -n 5 /mnt/bin/echo nice
+nice
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox nice /mnt/bin/false
+run: /mnt/paghbox exited with code 1
+pagh:rv64> run /mnt/paghbox nice -n bad echo hi
+nice: invalid adjustment: 'bad'
+run: /mnt/paghbox exited with code 2
+
+===== boot 19: exit codes =====
+pagh:rv64> run /mnt/paghbox exit 7
+run: /mnt/paghbox exited with code 7
+pagh:rv64> run /mnt/paghbox exit
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox exit 300
+exit: invalid status: '300'
+run: /mnt/paghbox exited with code 2
+
+===== boot 20: more paging =====
+pagh:rv64> run /mnt/paghbox more -n 3 /mnt/more.txt
+1
+2
+3
+--More--
+4
+5
+6
+--More--
+7
+8
+9
+--More--
+10
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox more -d -n 5 /mnt/more.txt
+1
+2
+3
+4
+5
+--More-- (Press space to continue, 'q' to quit.)
+6
+7
+8
+9
+10
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox more -n 0 /mnt/more.txt
+more: invalid line count: '0'
+run: /mnt/paghbox exited with code 2
+
+===== boot 21: nm tables =====
+pagh:rv64> run /mnt/paghbox nm /mnt/symbols.elf
+0000000000000040 d counter
+0000000000001234 T main
+0000000000000000 U puts
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox nm -D /mnt/symbols.elf
+0000000000002000 T dynfunc
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox nm -u /mnt/symbols.elf
+0000000000000000 U puts
+run: /mnt/paghbox exited with code 0
+
+===== boot 22: nm sort and errors =====
+pagh:rv64> run /mnt/paghbox nm -n /mnt/symbols.elf
+0000000000000000 U puts
+0000000000000040 d counter
+0000000000001234 T main
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox nm /mnt/notelf.txt
+nm: /mnt/notelf.txt: file is too short for an ELF64 header
+run: /mnt/paghbox exited with code 1
+pagh:rv64> run /mnt/paghbox nm -z /mnt/symbols.elf
+usage: nm [-D] [-u] [-n] FILE...
+run: /mnt/paghbox exited with code 2
+
+===== boot 23: watch finite =====
+pagh:rv64> run /mnt/paghbox watch -t -c 2 -n 0 /mnt/bin/echo hi
+[2J[Hhi
+[2J[Hhi
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox watch -c 1 -n 0 /mnt/bin/echo hi
+[2J[HEvery 0s: /mnt/bin/echo hi
+hi
+run: /mnt/paghbox exited with code 0
+

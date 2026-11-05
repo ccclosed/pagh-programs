@@ -4,13 +4,17 @@
 //! Everything returns [`Errno`]; applets decide the diagnostics and the exit
 //! code. Nothing here panics on bad input.
 
+use alloc::format;
 use alloc::string::String;
 use alloc::vec::Vec;
 
+use libpagh::env;
 use libpagh::errno::{Errno, Result};
+use libpagh::fs;
 use libpagh::fs::File;
 use libpagh::sys;
 use libpagh::EntryKind;
+use libpagh::Timespec;
 
 /// Exit code for a normal result.
 pub const EXIT_OK: i32 = 0;
@@ -207,6 +211,184 @@ pub fn parse_usize(text: &str) -> Option<usize> {
     text.parse::<usize>().ok()
 }
 
+/// Parse `SECONDS` or `SECONDS.FRACTION` (up to nine fractional digits).
+///
+/// This is the `sleep` grammar, shared by `sleep`, `timeout` and `watch`:
+/// integer seconds or a decimal fraction, no suffixes and no sign. Zero is
+/// valid. The caller decides whether a missing or malformed value is a usage
+/// error; this function never panics.
+pub fn parse_duration(text: &str) -> Option<Timespec> {
+    let (whole, fraction) = match text.split_once('.') {
+        Some((whole, fraction)) => (whole, Some(fraction)),
+        None => (text, None),
+    };
+    let has_whole = !whole.is_empty();
+    let has_fraction = fraction.map_or(false, |part| !part.is_empty());
+    if !has_whole && !has_fraction {
+        return None;
+    }
+
+    let seconds: i64 = if whole.is_empty() {
+        0
+    } else {
+        if !whole.bytes().all(|byte| byte.is_ascii_digit()) {
+            return None;
+        }
+        whole.parse::<i64>().ok()?
+    };
+
+    let mut nanos: i64 = 0;
+    if let Some(fraction) = fraction {
+        if fraction.len() > 9 {
+            return None;
+        }
+        let mut scale: i64 = 100_000_000;
+        for byte in fraction.bytes() {
+            if !byte.is_ascii_digit() {
+                return None;
+            }
+            nanos += i64::from(byte - b'0') * scale;
+            scale /= 10;
+        }
+    }
+
+    Some(Timespec { seconds, nanos })
+}
+
+/// Parse a signal name (`TERM`, `SIGTERM`, any ASCII case) or a number
+/// `0..=64`.
+///
+/// The same table is used by `kill` and `timeout`, so a signal that one
+/// accepts is not rejected by the other.
+pub fn parse_signal(text: &str) -> Option<i32> {
+    if !text.is_empty() && text.bytes().all(|byte| byte.is_ascii_digit()) {
+        let number = text.parse::<i32>().ok()?;
+        if (0..=64).contains(&number) {
+            return Some(number);
+        }
+        return None;
+    }
+    let upper = text.to_ascii_uppercase();
+    let name = upper.strip_prefix("SIG").unwrap_or(&upper);
+    match name {
+        "HUP" => Some(sys::SIGHUP),
+        "INT" => Some(sys::SIGINT),
+        "QUIT" => Some(sys::SIGQUIT),
+        "KILL" => Some(sys::SIGKILL),
+        "USR1" => Some(sys::SIGUSR1),
+        "USR2" => Some(sys::SIGUSR2),
+        "ALRM" => Some(sys::SIGALRM),
+        "TERM" => Some(sys::SIGTERM),
+        "CHLD" => Some(sys::SIGCHLD),
+        "CONT" => Some(sys::SIGCONT),
+        "STOP" => Some(sys::SIGSTOP),
+        _ => None,
+    }
+}
+
+/// True for a path that `fs::stat` says is a regular file.
+fn is_file(path: &str) -> bool {
+    fs::stat(path).map(|stat| stat.is_file()).unwrap_or(false)
+}
+
+/// Resolve a command name the way this port's shell does.
+///
+/// The kernel does not set `PATH`, so the search is deliberately fixed:
+///
+/// 1. `/mnt/bin/<name>` (where `pkg install` puts the symlinks);
+/// 2. `<PWD>/<name>`;
+/// 3. a literal absolute path, or a relative path resolved against `PWD`.
+///
+/// Returns the absolute path as a `String`, or `ENOENT`. A directory is not a
+/// command and the executable bit is not inspected (`test -x` does that).
+pub fn which(program: &str) -> Result<String> {
+    if program.is_empty() {
+        return Err(Errno::ENOENT);
+    }
+    if program.contains('/') {
+        let candidate = if program.starts_with('/') {
+            String::from(program)
+        } else {
+            join_path(&env::current_dir(), program)
+        };
+        return if is_file(&candidate) {
+            Ok(candidate)
+        } else {
+            Err(Errno::ENOENT)
+        };
+    }
+
+    let installed = format!("/mnt/bin/{program}");
+    if is_file(&installed) {
+        return Ok(installed);
+    }
+    let local = join_path(&env::current_dir(), program);
+    if is_file(&local) {
+        return Ok(local);
+    }
+    Err(Errno::ENOENT)
+}
+
+/// Decode the raw `wait4` status into an exit code.
+///
+/// The kernel stores `code << 8` for a normal exit and the signal number in
+/// the low seven bits for a signal/fault death; the shell convention
+/// `128 + signal` is returned for the latter. There is no core-dump bit.
+pub fn wait_status_code(status: i32) -> i32 {
+    let signal = status & 0x7f;
+    if signal != 0 {
+        128 + signal
+    } else {
+        (status >> 8) & 0xff
+    }
+}
+
+/// Fork a child and `execve` `program` with `args`.
+///
+/// The child's `argv[0]` is the resolved absolute path, as busybox does; the
+/// child inherits stdout/stderr and a single-entry environment (`PWD`), so a
+/// relative-path applet still resolves against the caller's directory. On an
+/// `execve` failure the child prints the diagnostic on fd 2 and exits 127;
+/// the parent gets the pid. The caller owns the `wait4`.
+pub fn spawn(program: &str, args: &[&str]) -> Result<i32> {
+    let path = which(program)?;
+    spawn_path(&path, args)
+}
+
+/// [`spawn`] with an already resolved absolute `path` (no search).
+pub fn spawn_path(path: &str, args: &[&str]) -> Result<i32> {
+    let mut argv: Vec<&str> = Vec::new();
+    argv.try_reserve(args.len() + 1)
+        .map_err(|_| Errno::ENOMEM)?;
+    argv.push(path);
+    argv.extend_from_slice(args);
+
+    let pwd = env::current_dir();
+    let pwd_entry = format!("PWD={pwd}");
+    let envp = [pwd_entry.as_str()];
+
+    let pid = sys::fork()?;
+    if pid == 0 {
+        // A failed execve must not fall back into the parent's code: report it
+        // and make the child's exit status the conventional 127.
+        if let Err(err) = sys::execve(path, &argv, &envp) {
+            libpagh::eprintln!("{path}: {err}");
+        }
+        sys::exit(127);
+    }
+    Ok(pid)
+}
+
+/// Fork, `execve` and block in `wait4`; returns the decoded child status.
+///
+/// A missing command is `Err(ENOENT)` from [`which`]; an `execve` failure in
+/// the child is reported by the child and surfaces as status 127.
+pub fn spawn_wait(program: &str, args: &[&str]) -> Result<i32> {
+    let pid = spawn(program, args)?;
+    let (_child, status) = sys::wait4(pid, 0)?;
+    Ok(wait_status_code(status))
+}
+
 /// Format a number into a decimal digit count (for `wc`'s column width).
 pub fn digits(mut value: u64) -> usize {
     let mut width = 1;
@@ -241,6 +423,47 @@ pub fn join_path(parent: &str, name: &str) -> String {
     }
     out.push_str(name);
     out
+}
+
+/// Create `path` and any missing parents, skipping components that exist.
+///
+/// `libpagh::fs::create_dir_all` starts at `/` and calls `mkdir` on each
+/// component; on 0.16.1 the mount point `/mnt` is a synthetic node whose
+/// `create_dir` answers `ENOTSUP`, so that helper fails for every path below a
+/// mount even though `/mnt` already exists. This version stats each component
+/// first and only calls `mkdir` for a missing one, which is the same
+/// stat-before-mkdir workaround `tar` uses. An existing non-directory is
+/// `EEXIST`, not silently skipped.
+pub fn create_dir_all(path: &str) -> Result<()> {
+    let absolute = libpagh::path::resolve(path);
+    if absolute == "/" {
+        return Ok(());
+    }
+    let mut prefix = String::new();
+    for component in absolute.split('/').filter(|component| !component.is_empty()) {
+        prefix.push('/');
+        prefix.push_str(component);
+        match fs::stat(&prefix) {
+            Ok(stat) => {
+                if !stat.is_dir() {
+                    return Err(Errno::EEXIST);
+                }
+                continue;
+            }
+            Err(Errno::ENOENT) => {}
+            Err(err) => return Err(err),
+        }
+        match fs::create_dir(&prefix) {
+            Ok(()) => {}
+            Err(Errno::EEXIST) => {
+                if !fs::stat(&prefix)?.is_dir() {
+                    return Err(Errno::EEXIST);
+                }
+            }
+            Err(err) => return Err(err),
+        }
+    }
+    Ok(())
 }
 
 /// The kind of `path` **without following a final symbolic link**.

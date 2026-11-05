@@ -106,6 +106,19 @@ pub mod whoami;
 pub mod which;
 pub mod xxd;
 pub mod yes;
+pub mod command;
+pub mod exit;
+pub mod install;
+pub mod more;
+pub mod nice;
+pub mod nm;
+pub mod parallel;
+pub mod shred;
+pub mod time;
+pub mod timeout;
+pub mod type_applet;
+pub mod watch;
+pub mod xargs;
 
 /// Every applet in the bundle. `tools/build_repo.py` parses this list to build
 /// the package manifest, so it is the single source of truth for `commands=`.
@@ -204,6 +217,19 @@ pub const NAMES: &[&str] = &[
     "gunzip",
     "tar",
     "untar",
+    "timeout",
+    "watch",
+    "xargs",
+    "parallel",
+    "install",
+    "shred",
+    "command",
+    "type",
+    "time",
+    "exit",
+    "nice",
+    "more",
+    "nm",
 ];
 
 /// Run an applet by name; `None` means "no such applet".
@@ -304,6 +330,19 @@ pub fn dispatch(name: &str, args: &[String]) -> Option<i32> {
         "gunzip" => gunzip::run(args),
         "tar" => tar::run(args),
         "untar" => untar::run(args),
+        "timeout" => timeout::run(args),
+        "watch" => watch::run(args),
+        "xargs" => xargs::run(args),
+        "parallel" => parallel::run(args),
+        "install" => install::run(args),
+        "shred" => shred::run(args),
+        "command" => command::run(args),
+        "type" => type_applet::run(args),
+        "time" => time::run(args),
+        "exit" => exit::run(args),
+        "nice" => nice::run(args),
+        "more" => more::run(args),
+        "nm" => nm::run(args),
         _ => return None,
     })
 }

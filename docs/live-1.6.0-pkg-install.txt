@@ -1,0 +1,39 @@
+# paghbox 1.6.0: pkg install and symlink live check
+
+Host: `python3 -m http.server 8776 --bind 127.0.0.1 --directory repo`.
+Guest: QEMU `virt`, kernel 0.16.1 debug, 64 MiB ext2, `--net`; the guest
+reaches the host as `10.0.2.2:8776`.
+The package was built by `python3 tools/build_repo.py`: 818936-byte payload,
+819777-byte `.ppkg`, SHA-256
+`87521c4ac4aaceefa84cd2cd546b3bb332145507d93e65881702625347900f94`.
+
+Boot 1 installs from the freshly built `repo/`; boot 2 reuses the same disk
+without a NIC and runs two installer-created symlinks, one of them a new
+batch-7 applet (`timeout`) and one the new `type`.
+
+```text
+==== install ====
+Type 'help' for the command list.
+
+pagh:rv64> pkg repo http://10.0.2.2:8776/
+pkg: repo http://10.0.2.2:8776/
+pagh:rv64> pkg index
+pkg: index 1 package(s)
+pagh:rv64> pkg install paghbox
+pkg: installed paghbox 1.6.0
+pagh:rv64>
+==== symlink ====
+Type 'help' for the command list.
+
+pagh:rv64> run /mnt/bin/timeout 1 /mnt/bin/echo installed
+installed
+run: /mnt/bin/timeout exited with code 0
+pagh:rv64> run /mnt/bin/type -v sleep
+/mnt/bin/sleep
+run: /mnt/bin/type exited with code 0
+pagh:rv64>
+```
+
+`debugfs -R 'ls -l /bin' disk.img` shows the installed `paghbox` inode
+(818936 bytes) and **107 symlinks** (one per `commands=` entry), including
+`timeout`, `type`, `xargs`, `nm` and `more`.

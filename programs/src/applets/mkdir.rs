@@ -70,7 +70,7 @@ pub fn run(args: &[String]) -> i32 {
     let mut status = util::EXIT_OK;
     for name in operands {
         let result = if parents {
-            fs::create_dir_all(name)
+            util::create_dir_all(name)
         } else {
             fs::create_dir(name)
         };

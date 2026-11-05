@@ -1,5 +1,196 @@
 # Живые прогоны paghbox
 
+## 1.6.0 (батч 7)
+
+Дата: 2026-11-06. Ядро: `/home/oleg/pagh-riscv/target/riscv64gc-unknown-none-elf/debug/pagh`
+(main 0.16.1; `run /mnt/paghbox uname -a` в QEMU печатает
+`pagh pagh-riscv 0.10.0 0.16.1 riscv64`). QEMU `qemu-system-riscv64` 10.2.2,
+машина `virt`, 256 MiB, serial на Unix-сокете, `-bios default`, modern virtio
+(`-global virtio-mmio.force-legacy=false`). Диск: 64 MiB ext2, создан на хосте
+`mke2fs -q -t ext2 -F -b 4096 -d rootfs disk.img 64M`; в корне — `paghbox`
+1.6.0, `/mnt/bin`-симлинки на `echo`/`sleep`/`true`/`false`/`cat` и фикстуры,
+включая синтетический ELF `symbols.elf` с `.symtab` и `.dynsym`.
+
+Драйвер — [`tools/live_test_160.py`](../tools/live_test_160.py): **23 загрузки
+по 2–3 команды**, после каждой проверялись вывод и
+`run: /mnt/paghbox exited with code N`. Итог: **67 PASS, 0 FAIL**; все 13
+новых applet'ов проверены функционально, коды 0/1/2/123/124/127 и точные
+строки `nm`/`more`/`shred`/`watch` сверены с моделью.
+
+Сырой транскрипт: [`live-1.6.0-transcript.txt`](live-1.6.0-transcript.txt).
+Отдельно: [`live-1.6.0-pkg-install.txt`](live-1.6.0-pkg-install.txt)
+(`pkg install paghbox 1.6.0`, 107 симлинков, `timeout` и `type` из `/mnt/bin`).
+
+### Итог 1.6.0
+
+* `timeout` — короткая команда (`1 sleep 0.2` → 0) и абсолютный путь
+  (`/mnt/paghbox echo`) работают; дедлайн `0.1 sleep 2` → **124** для
+  `TERM`, `KILL` и `9`; отсутствующая команда → 127, плохая длительность или
+  сигнал → 2.
+* `watch` — `-t -c 2 -n 0` даёт ровно две ANSI-очистки `ESC[2J ESC[H` и два
+  `hi`; без `-t` заголовок `Every 0s: /mnt/bin/echo hi`.
+* `xargs` — `-n 2` (две строки), `-I{}` (четыре подстановки), default
+  `echo`, пустой `-r` → 0; отсутствующая команда → 124, `false` → 123.
+* `parallel` — `-j 2` и default echo дают по одной строке на токен строго
+  последовательно; `-j 0` → 2.
+* `install` — `-D -m 600` создаёт `/mnt/inst/new/copy.txt`, содержимое
+  совпадает; повтор без `-f` → 1 (`File exists`), с `-f` → 0; неверный
+  mode/операнды → 2.
+* `shred` — `-n 1 -s 10` оставляет детерминированный printable-паттерн в
+  `cat`; `-u` удаляет файл (`cat` → 1); `-z` даёт 10 нулей + исходный `0a`
+  в `xxd`.
+* `command`/`type` — `-v sleep` → `/mnt/bin/sleep`, `-V echo` →
+  `echo is /mnt/bin/echo`, прямой и вложенный (`command /mnt/paghbox echo`)
+  запуск; missing → 127 (запуск) или 1 (`-v`); usage → 2.
+* `time` — `time echo` печатает `timed` + `real X.XXXs`, `user 0.000s`,
+  `sys 0.000s`, код ребёнка; `false` → 1, missing → 127.
+* `nice` — `-n 5` запускает `echo nice` (no-op по приоритету), `false` → 1,
+  `-n bad` → 2.
+* `exit` — `exit 7` → 7, `exit` → 0, `exit 300` → 2.
+* `more` — `-n 3` и `-d -n 5` дают точные чанки с `--More--`; `-n 0` → 2.
+* `nm` — `.symtab` (`d counter`, `T main`, `U puts`), `-D` (`T dynfunc`),
+  `-u` (только `U puts`), `-n` (сортировка по value); не-ELF → 1, `-z` → 2.
+* `pkg install` (опционально) — `pkg: installed paghbox 1.6.0`; 107
+  симлинков; `/mnt/bin/timeout` и `/mnt/bin/type` работают.
+
+### PASS-строки 1.6.0
+
+```text
+PASS timeout short: run /mnt/paghbox timeout 1 sleep 0.2
+PASS timeout absolute: run /mnt/paghbox timeout 2 /mnt/paghbox echo timed-ok
+PASS timeout TERM: run /mnt/paghbox timeout 0.1 sleep 2
+PASS timeout KILL: run /mnt/paghbox timeout -s KILL 0.1 sleep 2
+PASS timeout numeric: run /mnt/paghbox timeout -s 9 0.1 sleep 2
+PASS timeout missing: run /mnt/paghbox timeout 1 /mnt/nope
+PASS timeout bad duration: run /mnt/paghbox timeout bogus /mnt/bin/echo hi
+PASS timeout bad signal: run /mnt/paghbox timeout -s BOGUS 1 /mnt/bin/echo hi
+PASS xargs -n 2: run /mnt/paghbox xargs -a /mnt/tokens.txt -n 2 echo
+PASS xargs -I: run /mnt/paghbox xargs -a /mnt/tokens.txt -I{} echo pre-{}-post
+PASS xargs empty -r: run /mnt/paghbox xargs -a /mnt/empty.txt -r echo
+PASS xargs default: run /mnt/paghbox xargs -a /mnt/tokens.txt
+PASS xargs missing command: run /mnt/paghbox xargs -a /mnt/tokens.txt /mnt/nope
+PASS xargs failure: run /mnt/paghbox xargs -a /mnt/tokens.txt -n 1 /mnt/bin/false
+PASS parallel -j 2: run /mnt/paghbox parallel -j 2 -a /mnt/tokens.txt /mnt/bin/echo
+PASS parallel default echo: run /mnt/paghbox parallel -a /mnt/tokens.txt
+PASS parallel bad jobs: run /mnt/paghbox parallel -j 0 -a /mnt/tokens.txt echo
+PASS install -D -m: run /mnt/paghbox install -D -m 600 /mnt/install_src.txt /mnt/inst/new/copy.txt
+PASS install content: run /mnt/paghbox cat /mnt/inst/new/copy.txt
+PASS install exists: run /mnt/paghbox install -m 600 /mnt/install_src.txt /mnt/inst/new/copy.txt
+PASS install first: run /mnt/paghbox install -m 644 /mnt/install_src.txt /mnt/ow.txt
+PASS install -f: run /mnt/paghbox install -f -m 644 /mnt/install_src.txt /mnt/ow.txt
+PASS install force content: run /mnt/paghbox cat /mnt/ow.txt
+PASS install bad mode: run /mnt/paghbox install -m 999 /mnt/install_src.txt /mnt/x
+PASS install one operand: run /mnt/paghbox install /mnt/install_src.txt
+PASS install bad option: run /mnt/paghbox install -z /mnt/install_src.txt /mnt/x
+PASS shred -n 1 -s 10: run /mnt/paghbox shred -n 1 -s 10 /mnt/shred.txt
+PASS shred cat after: run /mnt/paghbox cat /mnt/shred.txt
+PASS shred -u: run /mnt/paghbox shred -u -n 1 /mnt/shred_del.txt
+PASS shred remove: run /mnt/paghbox shred -u -n 1 /mnt/shred_del.txt
+PASS shred gone: run /mnt/paghbox cat /mnt/shred_del.txt
+PASS shred zero: run /mnt/paghbox shred -n 1 -s 10 -z /mnt/shred.txt
+PASS shred zero run: run /mnt/paghbox shred -n 1 -s 10 -z /mnt/shred.txt
+PASS shred zero xxd: run /mnt/paghbox xxd /mnt/shred.txt
+PASS shred bad passes: run /mnt/paghbox shred -n x /mnt/shred.txt
+PASS command -v: run /mnt/paghbox command -v sleep
+PASS command -V: run /mnt/paghbox command -V echo
+PASS command run: run /mnt/paghbox command echo direct
+PASS command nested: run /mnt/paghbox command /mnt/paghbox echo nested
+PASS command missing: run /mnt/paghbox command /mnt/nope
+PASS command -v missing: run /mnt/paghbox command -v /mnt/nope
+PASS command no operand: run /mnt/paghbox command
+PASS command bad option: run /mnt/paghbox command -z
+PASS command -v no operand: run /mnt/paghbox command -v
+PASS type default: run /mnt/paghbox type sleep
+PASS type -v: run /mnt/paghbox type -v echo
+PASS type missing: run /mnt/paghbox type -V missing
+PASS time echo: run /mnt/paghbox time /mnt/bin/echo timed
+PASS time false: run /mnt/paghbox time /mnt/bin/false
+PASS time missing: run /mnt/paghbox time /mnt/nope
+PASS nice -n 5: run /mnt/paghbox nice -n 5 /mnt/bin/echo nice
+PASS nice false: run /mnt/paghbox nice /mnt/bin/false
+PASS nice bad: run /mnt/paghbox nice -n bad echo hi
+PASS exit 7: run /mnt/paghbox exit 7
+PASS exit default: run /mnt/paghbox exit
+PASS exit invalid: run /mnt/paghbox exit 300
+PASS more -n 3: run /mnt/paghbox more -n 3 /mnt/more.txt
+PASS more -d: run /mnt/paghbox more -d -n 5 /mnt/more.txt
+PASS more bad lines: run /mnt/paghbox more -n 0 /mnt/more.txt
+PASS nm symtab: run /mnt/paghbox nm /mnt/symbols.elf
+PASS nm dynsym: run /mnt/paghbox nm -D /mnt/symbols.elf
+PASS nm undefined: run /mnt/paghbox nm -u /mnt/symbols.elf
+PASS nm numeric: run /mnt/paghbox nm -n /mnt/symbols.elf
+PASS nm not elf: run /mnt/paghbox nm /mnt/notelf.txt
+PASS nm bad option: run /mnt/paghbox nm -z /mnt/symbols.elf
+PASS watch -t -c 2: run /mnt/paghbox watch -t -c 2 -n 0 /mnt/bin/echo hi
+PASS watch header: run /mnt/paghbox watch -c 1 -n 0 /mnt/bin/echo hi
+```
+
+### Показательные выводы 1.6.0
+
+```text
+run /mnt/paghbox timeout 0.1 sleep 2
+run: /mnt/paghbox exited with code 124
+
+run /mnt/paghbox xargs -a /mnt/tokens.txt -n 2 echo
+alpha beta
+gamma delta
+
+run /mnt/paghbox install -D -m 600 /mnt/install_src.txt /mnt/inst/new/copy.txt
+run: /mnt/paghbox exited with code 0
+run /mnt/paghbox cat /mnt/inst/new/copy.txt
+install me
+
+run /mnt/paghbox shred -n 1 -s 10 /mnt/shred.txt
+run: /mnt/paghbox exited with code 0
+run /mnt/paghbox cat /mnt/shred.txt
+gMM30WS\7A
+
+run /mnt/paghbox more -d -n 5 /mnt/more.txt
+1
+2
+3
+4
+5
+--More-- (Press space to continue, 'q' to quit.)
+6
+7
+8
+9
+10
+
+run /mnt/paghbox nm -n /mnt/symbols.elf
+0000000000000000 U puts
+0000000000000040 d counter
+0000000000001234 T main
+
+run /mnt/paghbox watch -t -c 2 -n 0 /mnt/bin/echo hi
+^[[2J^[[Hhi
+^[[2J^[[Hhi
+```
+
+### Чем проверка 1.6.0 ограничена
+
+* **Нет cross-process kill.** `kill(2)` в 0.16.1 трактует положительный pid
+  как thread id собственного run; `kill(child_pid)` может попасть в
+  родительский поток (в пробе это убивало сам `timeout`). Поэтому `timeout`
+  на дедлайне возвращает 124 и не ждёт живого ребёнка: его снимает
+  `cleanup_orphans` раннера после выхода foreground-процесса. `-s SIG`
+  валидируется, но не доставляется.
+* **Нет TTY.** `isatty` в ABI нет: `watch` всегда пишет ANSI-очистку в fd 1,
+  `more` не ждёт клавиш. `-c N` у `watch` — расширение для теста.
+* **stdin без EOF.** `xargs`/`parallel` рабочим входом используют `-a FILE`;
+  stdin-режим повис бы навсегда (свойство консоли).
+* **`parallel` последователен**, `-j N` принят и проигнорирован; в ABI нет
+  приоритетов, поэтому `nice` — no-op, а `time` печатает `user/sys 0.000s`.
+* **`install -m`** — per-run override (fchmodat не пишет inode); `-D` обходит
+  ENOTSUP `mkdirat('/mnt')` через stat-before-mkdir.
+* **`shred`** — best-effort: нет `fsync`, паттерн printable (удобно для
+  serial-транскрипта), не secure erase.
+* **`nm`** — только ELF64 little-endian, `.symtab` предпочитается `.dynsym`,
+  без demangling.
+* Serial-драйвер иногда теряет длинную очередь ввода; поэтому 2–3 команды на
+  загрузку и один retry на свежем образе.
+
 ## 1.5.0 (батч 6)
 
 Дата: 2026-11-06. Ядро: `/home/oleg/pagh-riscv/target/riscv64gc-unknown-none-elf/debug/pagh`
