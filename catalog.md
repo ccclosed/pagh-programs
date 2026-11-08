@@ -1,18 +1,18 @@
-# Каталог: 120 программ
+# Каталог: 120 программ + threads
 
-Цель — 120 applet'ов, запускаемых на pagh-riscv через `libpagh`/`paghbox`.
+Цель — 120 applet'ов плюс `threads`-демо, запускаемых на pagh-riscv через `libpagh`/`paghbox`.
 Статус: `[x]` реализовано и собирается в составе `paghbox`, `[~]` в работе,
 `[ ]` запланировано. Ядро — POSIX-подобные CLI-утилиты; «портировать» =
 реализовать семантику под `libpagh` (не тащить GNU/Linux-исходники).
 
-> Статус: 120 из 120 отмечены `[x]` — все собираются в `paghbox` 1.8.0.
+> Статус: 120 целевых + `threads`, все отмечены `[x]`; собираются в `paghbox` 1.9.0.
 > Батч 9 (6 утилит: sha3sum, calc, base85, readelf, uuidgen, paghfetch)
 > проверен живым запуском в QEMU на ядре 0.16.1: SHA3-256 сверен с
 > векторами FIPS 202, `-b`/`-c`/`--status` — по check-файлам; calc —
 > приоритеты, скобки, унарный минус и коды 1/2; base85 — round-trip в
 > обычном и Adobe-виде; readelf — заголовок/секции/символы на синтетическом
 > ELF64 RISC-V; uuidgen — v4-формат и `-n`; paghfetch — реальные uname,
-> uptime, nproc=1 и PWD. Список — ровно 120 уникальных имён, все 120 входят
+> uptime, nproc=1 и PWD. Список — 120 целевых имён + `threads`, все 121 входят
 > в `commands=` пакета.
 >
 > Ранее: батч 8 (7 утилит: sha224sum, sha384sum, crc32, base58, hex2bin,
@@ -164,9 +164,10 @@
 - [x] paghfetch — баннер: uname (sysname/nodename/release/machine), uptime, nproc=1, PWD
 - [x] arch — архитектура из uname
 - [x] tree — дерево каталога
+- [x] threads — 4 потока × 250 инкрементов под futex Mutex; counter=1000 (демо ABI, сверх 120)
 
-> Примечание: 120 отмеченных `[x]` реализованы в `programs/src/applets/` и
-> собираются в `paghbox` 1.8.0. Живая проверка ведётся по ядру 0.16.1
+> Примечание: 120 целевых `[x]` + `threads` реализованы в `programs/src/applets/` и
+> собираются в `paghbox` 1.9.0. Живая проверка ведётся по ядру 0.16.1
 > (`run /mnt/paghbox <applet> ...`), см. README и
 > `docs/live-testing.md`. Слот `dns` (DNS-резолв, для которого в ABI нет
 > syscall) отдан `sha512sum`, чтобы список остался ровно из 120 имён. Слоты

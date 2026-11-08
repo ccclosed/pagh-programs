@@ -102,6 +102,7 @@ pub mod test;
 pub mod touch;
 pub mod tr;
 pub mod tree;
+pub mod threads;
 pub mod true_applet;
 pub mod truncate;
 pub mod uname;
@@ -257,6 +258,7 @@ pub const NAMES: &[&str] = &[
     "readelf",
     "uuidgen",
     "paghfetch",
+    "threads",
 ];
 
 /// Run an applet by name; `None` means "no such applet".
@@ -383,6 +385,7 @@ pub fn dispatch(name: &str, args: &[String]) -> Option<i32> {
         "readelf" => readelf::run(args),
         "uuidgen" => uuidgen::run(args),
         "paghfetch" => paghfetch::run(args),
+        "threads" => threads::run(args),
         _ => return None,
     })
 }

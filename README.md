@@ -2,7 +2,7 @@
 
 Репозиторий портов: программы написаны **под нативный API `libpagh`**
 (соседний checkout `../pagh-api`), а не под Linux-совместимый слой. Один
-busybox-style ELF `paghbox` содержит 120 applet'ов; `tools/build_repo.py`
+busybox-style ELF `paghbox` содержит 121 applet; `tools/build_repo.py`
 упаковывает его в `.ppkg` и пишет `repo/index`. Установщик `pkg` в ядре
 pagh-riscv — потребитель этого репозитория: скачивает пакет по HTTP, сверяет
 SHA-256/размер, ставит ELF в `/mnt/bin` и создаёт симлинки на команды.
@@ -10,12 +10,12 @@ SHA-256/размер, ставит ELF в `/mnt/bin` и создаёт симл�
 ## Структура
 
 ```
-catalog.md                 целевые 120 программ и честный статус (120 [x])
+catalog.md                 целевые 120 программ + threads-демо (121 [x])
 docs/package-format.md     формат .ppkg и index (контракт с ядром)
 programs/                  crate paghbox: dispatch + applets/
   src/main.rs              argv[0]/`paghbox <applet>` + exit codes
   src/util.rs              EAGAIN-retry, Input, which/spawn/wait, duration
-  src/applets/             120 модулей:
+  src/applets/             121 модулей:
                            echo true false yes pwd basename dirname seq
                            cat wc head tail ls stat uname hostname arch nproc sleep
                            uptime date cal readlink realpath uniq sort nl fold expand
@@ -108,7 +108,7 @@ payload по SHA-256/размеру **до** записи и создаёт си
 `16 + manifest_len + payload_len`. `--check` проверяет именно такую трактовку;
 это же зафиксировано в [`docs/package-format.md`](docs/package-format.md).
 
-## Applet'ы (120)
+## Applet'ы (121)
 
 | Команда | Что делает | Коды выхода |
 |---|---|---|
@@ -261,7 +261,7 @@ QEMU; живым запуском проверен его разбор аргу�
 Сборка: `cargo build --release --target riscv64gc-unknown-none-elf` даёт
 статический RV64 ELF; `python3 tools/build_repo.py` пишет
 `repo/pkg/paghbox-1.8.0.ppkg`, а `python3 tools/build_repo.py --check` зелёный.
-Пакет `paghbox 1.8.0` содержит 120 команд; его размер и SHA-256 приведены в
+Пакет `paghbox 1.9.0` содержит 121 команду; его размер и SHA-256 приведены в
 разделе [`repo/`](#repo-и-воспроизводимость) ниже. `MAX_COMMANDS = 160` в
 установщике 0.16.1 с запасом покрывает 120.
 
@@ -278,7 +278,7 @@ native ABI + pkg installer), QEMU `virt`, 256 MiB, диск 64 MiB ext2
 Сырые транскрипты:
 [`docs/live-1.8.0-transcript.txt`](docs/live-1.8.0-transcript.txt) (13 загрузок),
 [`docs/live-1.8.0-pkg-install.txt`](docs/live-1.8.0-pkg-install.txt)
-(`pkg install` 1.8.0, 120 симлинков); история 1.7.0:
+(`pkg install` 1.8.0, 120 симлинков (историческая запись)); история 1.7.0:
 [`docs/live-1.7.0-transcript.txt`](docs/live-1.7.0-transcript.txt) (14 загрузок);
 история 1.6.0:
 [`docs/live-1.6.0-transcript.txt`](docs/live-1.6.0-transcript.txt) (23 загрузки),
@@ -319,15 +319,15 @@ PASS-строки и таблица: [`docs/live-testing.md`](docs/live-testing.
 | `time`/`nice` | `time echo` → `timed` + `real X.XXXs`, `user/sys 0.000s`, код 0; `time false` → 1; `nice -n 5` → `nice`, без приоритетов |
 | `exit`/`more`/`nm` | `exit 7` → 7, `exit` → 0, `exit 300` → 2; `more -n 3` и `-d` — точные чанки; `nm`, `-D`, `-u`, `-n` — точные строки, не-ELF → 1 |
 | `watch` | `-t -c 2 -n 0` → две ANSI-очистки + `hi`; с заголовком `Every 0s: /mnt/bin/echo hi` |
-| `pkg install` | `pkg: installed paghbox 1.8.0`; 120 симлинков; `/mnt/bin/sha3sum` и `/mnt/bin/calc` работают |
+| `pkg install` | `pkg: installed paghbox 1.8.0`; 120 симлинков (историческая запись); `/mnt/bin/sha3sum` и `/mnt/bin/calc` работают |
 
 В 1.8.0 `pkg install paghbox` проверен на чистом 64 MiB ext2 с `repo/` на
 хосте: `pkg: installed paghbox 1.8.0`, затем
 `run /mnt/bin/sha3sum /mnt/abc.txt` → `3a98…1532  /mnt/abc.txt` и
 `run /mnt/bin/calc 2+3*4` → `14`; `debugfs` показывает `paghbox`
-(891040 байт) и 120 симлинков в `/mnt/bin`, а `ls /mnt/bin` — 121 имя.
-`build_repo.py --check` подтверждает пакет, 120 команд и согласованность
-манифеста; `MAX_COMMANDS = 160` покрывает 120. Подробности —
+(894925 байт) и 121 симлинк в `/mnt/bin`, а `ls /mnt/bin` — 121 имя.
+`build_repo.py --check` подтверждает пакет, 121 команду и согласованность
+манифеста; `MAX_COMMANDS = 160` покрывает 121. Подробности —
 [`docs/live-1.8.0-pkg-install.txt`](docs/live-1.8.0-pkg-install.txt).
 
 ## Ограничения среды и ABI
@@ -479,11 +479,11 @@ PASS-строки и таблица: [`docs/live-testing.md`](docs/live-testing.
 `repo/` полностью воспроизводится командой `python3 tools/build_repo.py` из
 исходников и пинованного тулчейна; индекс детерминирован по содержимому
 (единственный недетерминизм — сам ELF от rustc). Текущий пакет — 891040
-байт payload / 891981 байт `.ppkg`, 120 команд, SHA-256
+байт payload / 894925 байт `.ppkg`, 120 команд, SHA-256
 `94832c9240b1dbeed68708576fa5f73fd9682011512e6f627cf771896e4e83ee`; в git
 он не попал (`.gitignore`), его место — на HTTP-зеркале.
 
-`catalog.md` — ровно 120 уникальных имён; `[x]` стоят у всех 120
+`catalog.md` — 120 целевых имён + `threads`; `[x]` стоят у всех 121
 реализованных, `[ ]` не осталось. Список проверяется
-`tools/live_test_180.py` и `grep`-ом по `NAMES`: все 120 имён входят в
+`tools/live_test_180.py` и `grep`-ом по `NAMES`: все 121 имя входят в
 `commands=` пакета.
