@@ -11,8 +11,9 @@
 //! accepts `0` and positive pids, and rejects negative pids (with `--` they
 //! could otherwise be mistaken for options). Every operand is attempted even
 //! after a failure; each failure prints `kill: PID: <errno>` and the applet
-//! exits 1. `ESRCH` is therefore `No such process`, as in the rest of the
-//! bundle.
+//! exits 1. `ESRCH` is therefore `No such process`: libpagh 0.6.1+ carries the
+//! variant (`pagh-api` PR #1), so the generic diagnostic path is enough — the
+//! old `Errno::Unknown` special case for a raw 3 is not needed anymore.
 //!
 //! The kernel shell has no `$$`, so the safe live probe is `kill -0 0`; a bad
 //! pid checks the ESRCH path. Exit: 0 all sent, 1 any failure, 2 usage.
@@ -21,7 +22,6 @@ use alloc::string::String;
 use alloc::vec::Vec;
 
 use libpagh::eprintln;
-use libpagh::errno::Errno;
 use libpagh::sys;
 
 use crate::util;
@@ -99,14 +99,9 @@ pub fn run(args: &[String]) -> i32 {
     for (pid, text) in parsed {
         match sys::kill(pid, signal) {
             Ok(()) => {}
-            // The frozen errno table has no ESRCH (raw 3), so libpagh maps the
-            // kernel's "no such task" answer to `Unknown`. For kill that is
-            // the ESRCH path; print the conventional message instead of the
-            // generic "outside the pagh ABI" diagnostic.
-            Err(Errno::Unknown) => {
-                eprintln!("kill: {text}: No such process");
-                status = util::EXIT_FAILURE;
-            }
+            // libpagh 0.6.1 maps the kernel's raw ESRCH (3) to `Errno::ESRCH`,
+            // so the generic path prints the conventional "No such process"
+            // text. (0.6.0 mapped it to `Unknown`; that special case is gone.)
             Err(err) => {
                 util::report("kill", text, err);
                 status = util::EXIT_FAILURE;

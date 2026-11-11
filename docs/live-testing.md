@@ -1,5 +1,162 @@
 # Живые прогоны paghbox
 
+## 1.10.0 (ABI 0.21.0: getrandom, DNS и TLS)
+
+Дата: 2026-11-12. Ядро: `/home/oleg/pagh-riscv/target/riscv64gc-unknown-none-elf/release/pagh`
+(main 0.21.0; `uname` печатает `pagh pagh-riscv 0.10.0 0.21.0 riscv64`).
+QEMU `qemu-system-riscv64` 10.2.2, машина `virt`, 256 MiB, serial на
+Unix-сокете, `-bios default`, modern virtio
+(`-global virtio-mmio.force-legacy=false`), NIC в QEMU user network для сетевых
+кейсов (DHCP `10.0.2.15`, хост `10.0.2.2`, DNS `10.0.2.3`). Диск: 64 MiB ext2,
+создан на хосте `mke2fs -q -t ext2 -F -b 4096 -d rootfs disk.img 64M`; в корне —
+`paghbox` 1.10.0, фикстуры 1.8.0 и короткий `h` (`hello\n`) для host-сервера.
+
+Драйвер — [`tools/live_test_1100.py`](../tools/live_test_1100.py): **27 загрузок
+по 1–4 команды** (вход одной загрузки ≤ 150 байт — буфер консоли ядра не
+принимает длинную очередь; драйвер это проверяет), после каждой сверяются
+вывод, `run: /mnt/paghbox exited with code N` и, для случайных данных,
+регулярное выражение/валидатор. Итог: **65 PASS, 0 FAIL**. Первые 13 загрузок —
+регрессия кейсов 1.8.0 на ядре 0.21.0 (36 проверок); дальше — новые проверки:
+`threads`, `uuidgen`/`shuf` на `getrandom`, `kill` (ESRCH через `libpagh`
+0.6.1), `dns`, `curl`/`wget` по `http://` против host-сервера (включая
+chunked-ответ), `https://` на `example.com` и fail-closed-ветки.
+
+> **Release-ядро, не debug.** Debug-сборка ядра 0.21.0 переполняет 16 KiB
+> kernel-стек на userland-сессии TLS (`tls_connect` → `user_open`): guard canary
+> рапортует `[task] STACK OVERFLOW`, затем user-задача падает по instruction
+> page fault. Release-ядро рукопожатие проводит; прогон поэтому на release (как и
+> `docs/live-tls.txt` самого ядра). Это ограничение debug-сборки, не `paghbox`.
+
+Сырой транскрипт: [`live-1.10.0-transcript.txt`](live-1.10.0-transcript.txt).
+Отдельно: [`live-1.10.0-pkg-install.txt`](live-1.10.0-pkg-install.txt) —
+`pkg install paghbox 1.10.0` (122 симлинка + `debugfs`), снимается
+[`tools/live_pkg_install.py`](../tools/live_pkg_install.py) (host HTTP-сервер,
+две загрузки; вторая — без NIC).
+
+### Итог 1.10.0
+
+* `threads` (демо 1.9.0, впервые в транскрипте) — 4 потока × 250 инкрементов под
+  `libpagh::sync::Mutex`; `counter=1000`, exit 0; лишний аргумент — usage (2).
+* `uuidgen` — 16 байт из пула энтропии ядра (`getrandom`): четыре UUID одного
+  запуска различны (проверяет валидатор), формат версии 4 и варианта `[89ab]`
+  сохранён; `-n 3`/`-n 4` — столько строк; `-n x` — 2; при отсутствии seed'а
+  applet выходит 1, а не подменяет источник.
+* `dns` — `example.com -> 8.…` через resolver QEMU `10.0.2.3` и через
+  `-s 10.0.2.3`; IPv4-литерал отвечает без сети (`10.0.2.2 -> 10.0.2.2`);
+  NXDOMAIN — `dns: example.invalid: Protocol error` + exit 1; пустой хост/
+  неизвестная опция — exit 2.
+* `curl`/`wget` `http://` — host-сервер `10.0.2.2:PORT`: тело `hello`; `-i` —
+  `HTTP/1.0 200 OK` + `Content-Length: 6`; `wget -O h.out` —
+  `wget: saved h.out (6 bytes)`, `cat h.out` → `hello`.
+* `curl`/`wget` `https://example.com/` — kernel TLS 1.3 (в логе ядра
+  `verified leaf=… chain=4 certs anchors=6`, `CertificateVerify OK`,
+  `close_notify`): `HTTP/1.1 200 OK`, `Content-Type: text/html`, тело
+  `Example Domain`; проверены `-i`, `-o out.html`, `wget -O w.html`
+  (`wget: saved w.html (577 bytes)`) и `wget -O -`.
+* Fail-closed: `curl https://example.invalid/` — `curl: resolve: …` (1);
+  `curl ftp://example.com/` — `unsupported URL` (2); локальный
+  `openssl s_server` с self-signed сертификатом на `10.0.2.2:PORT` —
+  `curl: tls: Certificate rejected by the trust decision` (1), в логе ядра
+  `verify FAILED cause=chain (NoAnchor)`. Отключить проверку нельзя: флага нет
+  ни в applet'е, ни в ABI.
+* `curl`/`wget` framing — host-сервер отдаёт `Transfer-Encoding: chunked` в
+  ответ на HTTP/1.0-запрос (peer вправе проигнорировать версию): тело из двух
+  чанков (3+3 байта) склеено в `hello`, `-i` показывает `Transfer-Encoding:
+  chunked`; `Content-Length`-путь проверен на `/h` (`Content-Length: 6`).
+* `shuf -e a b c d e` — те же пять строк в другом порядке: seed из
+  `getrandom`, а не фиксированный.
+* `kill` — `kill -0 0` (проба группы) даёт 0 без вывода; `kill 99999` →
+  `kill: 99999: No such process` (exit 1) — это `Errno::ESRCH`, который
+  `libpagh` 0.6.1 (`pagh-api` PR #1) отображает своим текстом, а не
+  `Unknown`; `kill abc` → `invalid pid` (2). Пакет собран против `libpagh`
+  0.6.1 (`pagh-api` PR #1, ветка `night/20261112-abi-errnos` @ `472874e`);
+  сборка на 0.6.0 (`ed37c1d`) тоже проверена — обе версии `Errno`
+  компилируются, applet больше не подменяет `Errno::Unknown`.
+
+### Чем проверка ограничена (1.10.0)
+
+* DNS — один `A`-запрос, без DNSSEC/CNAME/AAAA; адрес зависит от сети хоста.
+  TLS-кейсы требуют host-интернета, HTTP-кейсы — локального сервера; локальные
+  кейсы идут без сети.
+* TLS-гейт проверен applet-уровнем только на отказе цепочки (self-signed) и на
+  успешном `example.com`; SAN/expiry/clock-gate по отдельности покрыты
+  `tools/test_tls.py` ядра и `docs/live-tls.txt`.
+* `curl`/`wget` не умеют редиректы, keep-alive и сжатие; тело — до 8 MiB;
+  `wget -O -` пишет тело в stdout, summary — в stderr.
+* Debug-ядро на userland-TLS падает (см. врезку выше); прогон — на release.
+* У 1.9.0 не было отдельного драйвера/транскрипта; `threads` впервые проверен
+  здесь, регрессия 1.8.0 перезапущена на 0.21.0.
+
+### PASS-строки 1.10.0
+
+```text
+PASS sha3 empty: run /mnt/paghbox sha3sum /mnt/empty.txt
+PASS sha3 abc: run /mnt/paghbox sha3sum /mnt/abc.txt
+PASS sha3 fox: run /mnt/paghbox sha3sum /mnt/fox.txt
+PASS sha3 -b: run /mnt/paghbox sha3sum -b /mnt/abc.txt
+PASS sha3 check: run /mnt/paghbox sha3sum -c /mnt/sums.sha3
+PASS sha3 bad check: run /mnt/paghbox sha3sum -c /mnt/sums.sha3.bad
+PASS sha3 status ok: run /mnt/paghbox sha3sum --status -c /mnt/sums.sha3
+PASS sha3 status bad: run /mnt/paghbox sha3sum --status -c /mnt/sums.sha3.bad
+PASS sha3 bad option: run /mnt/paghbox sha3sum -z
+PASS calc precedence: run /mnt/paghbox calc 2+3*4
+PASS calc parentheses: run /mnt/paghbox calc (2+3)*4
+PASS calc unary minus: run /mnt/paghbox calc -5+2
+PASS calc divide by zero: run /mnt/paghbox calc 1/0
+PASS calc syntax: run /mnt/paghbox calc 2+
+PASS calc modulo zero: run /mnt/paghbox calc 7%0
+PASS calc two expressions: run /mnt/paghbox calc 1+1 2*3
+PASS calc eval: run /mnt/paghbox calc -e 10%3
+PASS base85 hello: run /mnt/paghbox base85 /mnt/hello.txt
+PASS base85 zero group: run /mnt/paghbox base85 /mnt/zeros.bin
+PASS base85 adobe: run /mnt/paghbox base85 -a /mnt/abc.txt
+PASS base85 decode hello: run /mnt/paghbox base85 -d /mnt/b85hello.txt
+PASS base85 decode adobe: run /mnt/paghbox base85 -d /mnt/b85adobe.txt
+PASS base85 invalid: run /mnt/paghbox base85 -d /mnt/b85bad.txt
+PASS readelf header: run /mnt/paghbox readelf /mnt/symbols.elf
+PASS readelf not elf: run /mnt/paghbox readelf -h /mnt/notelf.txt
+PASS readelf no operand: run /mnt/paghbox readelf
+PASS readelf sections: run /mnt/paghbox readelf -S /mnt/symbols.elf
+PASS readelf symbols: run /mnt/paghbox readelf -s /mnt/symbols.elf
+PASS readelf program headers: run /mnt/paghbox readelf -l /mnt/symbols.elf
+PASS readelf bad section file: run /mnt/paghbox readelf -S /mnt/notelf.txt
+PASS readelf bad option: run /mnt/paghbox readelf -z /mnt/symbols.elf
+PASS uuidgen default: run /mnt/paghbox uuidgen
+PASS uuidgen count: run /mnt/paghbox uuidgen -n 3
+PASS uuidgen bad count: run /mnt/paghbox uuidgen -n x
+PASS paghfetch: run /mnt/paghbox paghfetch
+PASS paghfetch usage: run /mnt/paghbox paghfetch x
+PASS threads counter: run /mnt/paghbox threads
+PASS threads usage: run /mnt/paghbox threads -x
+PASS uuidgen entropy: run /mnt/paghbox uuidgen -n 4
+PASS shuf entropy: run /mnt/paghbox shuf -e a b c d e
+PASS kill -0 group: run /mnt/paghbox kill -0 0
+PASS kill no such pid: run /mnt/paghbox kill 99999
+PASS kill bad pid: run /mnt/paghbox kill abc
+PASS dns literal: run /mnt/paghbox dns 10.0.2.2
+PASS dns usage: run /mnt/paghbox dns -z
+PASS dns missing host: run /mnt/paghbox dns
+PASS curl http: run /mnt/paghbox curl http://10.0.2.2:48633/h
+PASS curl http -i: run /mnt/paghbox curl -i http://10.0.2.2:48633/h
+PASS wget http: run /mnt/paghbox wget -O h.out http://10.0.2.2:48633/h
+PASS cat wget output: run /mnt/paghbox cat h.out
+PASS curl chunked: run /mnt/paghbox curl http://10.0.2.2:48633/chunked
+PASS curl chunked -i: run /mnt/paghbox curl -i http://10.0.2.2:48633/chunked
+PASS dns example.com: run /mnt/paghbox dns example.com
+PASS dns -s example.com: run /mnt/paghbox dns -s 10.0.2.3 example.com
+PASS dns nxdomain: run /mnt/paghbox dns example.invalid
+PASS curl https: run /mnt/paghbox curl https://example.com/
+PASS curl https -i: run /mnt/paghbox curl -i https://example.com/
+PASS curl https -o: run /mnt/paghbox curl -o out.html https://example.com/
+PASS cat https output: run /mnt/paghbox cat out.html
+PASS wget https: run /mnt/paghbox wget -O w.html https://example.com/
+PASS wget https body: run /mnt/paghbox cat w.html
+PASS wget https stdout: run /mnt/paghbox wget -O - https://example.com/
+PASS curl nxdomain: run /mnt/paghbox curl https://example.invalid/
+PASS curl bad scheme: run /mnt/paghbox curl ftp://example.com/
+PASS curl bad tls: run /mnt/paghbox curl https://10.0.2.2:48639/
+```
+
 ## 1.8.0 (батч 9)
 
 Дата: 2026-11-06. Ядро: `/home/oleg/pagh-riscv/target/riscv64gc-unknown-none-elf/debug/pagh`

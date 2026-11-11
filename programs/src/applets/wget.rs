@@ -1,12 +1,13 @@
 //! `wget` — one HTTP/1.0 GET written to a file.
 //!
-//! Usage: `wget [-O FILE] http://IPv4[:PORT]/PATH`. The body is written to
+//! Usage: `wget [-O FILE] http[s]://HOST[:PORT]/PATH`. The body is written to
 //! `FILE`, or to the basename of the URL path when `-O` is absent (`/` becomes
-//! `index.html`); `-O -` writes to stdout. The request is the same native
-//! HTTP/1.0 GET as `curl`'s: IPv4 literal only, `Connection: close`, no DNS,
-//! TLS, redirects, retries or resume. After a successful write the single
-//! summary line `wget: saved TARGET (N bytes)` goes to stderr, so it never
-//! contaminates a body written to stdout.
+//! `index.html`); `-O -` writes to stdout. The request is the same one as
+//! `curl`'s: an IPv4 literal or DNS name, plain HTTP over the native TCP client
+//! or a kernel-verified TLS 1.3 session for `https://`, `Connection: close`, no
+//! redirects, retries or resume. After a successful write the single summary
+//! line `wget: saved TARGET (N bytes)` goes to stderr, so it never contaminates
+//! a body written to stdout.
 //!
 //! `-O` is deliberately the only option: no `-q`, `-c`, `-P`, `-O-` progress,
 //! timestamping or recursive download. A non-2xx status is an HTTP error with
@@ -22,7 +23,7 @@ use libpagh::fs::File;
 use super::httpc::{self, Error};
 use crate::util;
 
-const USAGE: &str = "usage: wget [-O FILE] http://HOST[:PORT]/PATH";
+const USAGE: &str = "usage: wget [-O FILE] http(s)://HOST[:PORT]/PATH";
 
 pub fn run(args: &[String]) -> i32 {
     let mut output: Option<&str> = None;
@@ -113,10 +114,14 @@ pub fn run(args: &[String]) -> i32 {
 
 fn report_error(error: Error) -> i32 {
     match error {
+        Error::Resolve(err) => eprintln!("wget: resolve: {err}"),
         Error::Connect(err) => eprintln!("wget: connect: {err}"),
+        Error::Tls(err) => eprintln!("wget: tls: {err}"),
         Error::Send(err) => eprintln!("wget: send: {err}"),
         Error::Receive(err) => eprintln!("wget: receive: {err}"),
         Error::Malformed => eprintln!("wget: malformed HTTP response"),
+        Error::TooLarge => eprintln!("wget: response larger than 8 MiB"),
+        Error::OutOfMemory => eprintln!("wget: out of memory"),
         Error::Http(code, reason) => {
             if reason.is_empty() {
                 eprintln!("wget: HTTP {code}");

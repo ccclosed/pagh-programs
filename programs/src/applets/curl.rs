@@ -1,16 +1,21 @@
-//! `curl` — one HTTP/1.0 GET over the ABI's native TCP client.
+//! `curl` — one HTTP/1.0 GET over the ABI's native TCP client or TLS session.
 //!
-//! Usage: `curl [-i] [-o FILE] http://IPv4[:PORT]/PATH`. The URL must use an
-//! IPv4 literal: there is no DNS in the kernel stack, and only `http://` is
-//! supported (no TLS, no redirects, no proxies). The request uses HTTP/1.0
-//! with `Connection: close`, and the body is printed to stdout unless
-//! `-o FILE` names a destination (`-o -` means stdout). `-i` includes the
-//! status line and headers, normalised to LF, before the body.
+//! Usage: `curl [-i] [-o FILE] http[s]://HOST[:PORT]/PATH`. `HOST` is an IPv4
+//! literal or a DNS name (resolved with `libpagh::dns`, one `A` query over
+//! UDP). Selecting `https://` connects the native TCP client and hands the
+//! descriptor to the kernel's TLS 1.3 session: verification is fail-closed
+//! (CA bundle, SAN, clock gate, `CertificateVerify`) and cannot be disabled.
+//! There are no redirects, proxies, authentication, POST, uploads or cookies.
+//!
+//! The request uses HTTP/1.0 with `Connection: close`, and the body is printed
+//! to stdout unless `-o FILE` names a destination (`-o -` means stdout). `-i`
+//! includes the status line and headers, normalised to LF, before the body.
 //!
 //! A non-2xx status is an HTTP error: the diagnostic is
-//! `curl: HTTP NNN Reason` and the exit code is 1. A failed connect/send/
-//! receive is also exit 1; a bad option or unsupported URL is exit 2. There is
-//! no `-f`, `-L`, `-s`, `-H`, POST, upload or cookie support.
+//! `curl: HTTP NNN Reason` and the exit code is 1. A failed resolve/connect/
+//! TLS handshake/send/receive is also exit 1; a bad option or unsupported URL
+//! is exit 2. There is no `-f`, `-L`, `-s`, `-H`, POST, upload or cookie
+//! support.
 //!
 //! Exit: 0 success, 1 network/HTTP/write error, 2 usage.
 
@@ -23,7 +28,7 @@ use libpagh::fs::File;
 use super::httpc::{self, Error};
 use crate::util;
 
-const USAGE: &str = "usage: curl [-i] [-o FILE] http://HOST[:PORT]/PATH";
+const USAGE: &str = "usage: curl [-i] [-o FILE] http(s)://HOST[:PORT]/PATH";
 
 pub fn run(args: &[String]) -> i32 {
     let mut headers = false;
@@ -131,10 +136,14 @@ pub fn run(args: &[String]) -> i32 {
 
 fn report_error(error: Error) -> i32 {
     match error {
+        Error::Resolve(err) => eprintln!("curl: resolve: {err}"),
         Error::Connect(err) => eprintln!("curl: connect: {err}"),
+        Error::Tls(err) => eprintln!("curl: tls: {err}"),
         Error::Send(err) => eprintln!("curl: send: {err}"),
         Error::Receive(err) => eprintln!("curl: receive: {err}"),
         Error::Malformed => eprintln!("curl: malformed HTTP response"),
+        Error::TooLarge => eprintln!("curl: response larger than 8 MiB"),
+        Error::OutOfMemory => eprintln!("curl: out of memory"),
         Error::Http(code, reason) => {
             if reason.is_empty() {
                 eprintln!("curl: HTTP {code}");

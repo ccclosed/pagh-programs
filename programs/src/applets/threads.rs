@@ -8,14 +8,20 @@ use alloc::sync::Arc;
 use alloc::vec::Vec;
 
 use libpagh::sync::Mutex;
-use libpagh::{print, println, thread};
+use libpagh::{eprintln, print, println, thread};
+
+use crate::util;
 
 const USAGE: &str = "usage: threads";
 
 pub fn run(args: &[alloc::string::String]) -> i32 {
-    if args.iter().any(|arg| arg == "-h" || arg == "--help") {
-        println!("{USAGE}");
-        return 0;
+    if let Some(arg) = args.first() {
+        if arg == "-h" || arg == "--help" {
+            println!("{USAGE}");
+            return util::EXIT_OK;
+        }
+        eprintln!("{USAGE}");
+        return util::EXIT_USAGE;
     }
     let counter = Arc::new(Mutex::new(0u32));
     let mut handles: Vec<thread::JoinHandle> = Vec::new();
