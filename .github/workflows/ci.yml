@@ -21,3 +21,5 @@ jobs:
         run: |
           python3 tools/build_repo.py --elf target/riscv64gc-unknown-none-elf/release/paghbox
           python3 tools/build_repo.py --check
+      - name: Check the documentation figures against the code
+        run: python3 tools/check_docs.py
