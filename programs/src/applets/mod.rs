@@ -36,6 +36,7 @@ pub mod diff;
 mod digest;
 pub mod dirname;
 pub mod dns;
+pub mod dos2unix;
 mod elf;
 pub mod du;
 pub mod echo;
@@ -57,6 +58,7 @@ pub mod hexdump;
 mod hashsum;
 pub mod hostname;
 mod httpc;
+pub mod iconv;
 pub mod id;
 pub mod ln;
 pub mod ls;
@@ -74,6 +76,7 @@ pub mod od;
 pub mod paghfetch;
 pub mod paste;
 pub mod patch;
+pub mod printenv;
 pub mod printf;
 pub mod pwd;
 pub mod readelf;
@@ -110,6 +113,7 @@ pub mod true_applet;
 pub mod truncate;
 pub mod uname;
 pub mod unexpand;
+pub mod unix2dos;
 pub mod untar;
 pub mod uniq;
 pub mod uptime;
@@ -265,6 +269,10 @@ pub const NAMES: &[&str] = &[
     "threads",
     "nc",
     "dd",
+    "dos2unix",
+    "unix2dos",
+    "iconv",
+    "printenv",
 ];
 
 /// Run an applet by name; `None` means "no such applet".
@@ -395,6 +403,10 @@ pub fn dispatch(name: &str, args: &[String]) -> Option<i32> {
         "threads" => threads::run(args),
         "nc" => nc::run(args),
         "dd" => dd::run(args),
+        "dos2unix" => dos2unix::run(args),
+        "unix2dos" => unix2dos::run(args),
+        "iconv" => iconv::run(args),
+        "printenv" => printenv::run(args),
         _ => return None,
     })
 }

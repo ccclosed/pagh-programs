@@ -1,6 +1,6 @@
 [package]
 name = "paghbox"
-version = "1.11.0"
+version = "1.12.0"
 edition = "2021"
 publish = false
 description = "busybox-style applet bundle for pagh-riscv"

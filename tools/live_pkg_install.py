@@ -122,6 +122,7 @@ def build_image(disk: pathlib.Path, rootfs: pathlib.Path) -> None:
     (rootfs / "abc.txt").write_bytes(b"abc")
     (rootfs / "hello.txt").write_bytes(b"hello\n")
     (rootfs / "dd.txt").write_bytes(b"dd-payload\n")
+    (rootfs / "crlf.txt").write_bytes(b"one\r\ntwo\r\n")
     if disk.exists():
         disk.unlink()
     subprocess.run(
@@ -228,18 +229,39 @@ def run() -> int:
             if f"pkg: index 1 package(s)" not in joined:
                 raise Failure(f"the index fetch did not report one package\n{joined}")
 
-            symlink_log = boot(
-                args.runner, args.kernel, disk,
-                "cd /mnt\nrun /mnt/bin/dns 10.0.2.2\nrun /mnt/bin/threads\n"
-                "run /mnt/bin/dd if=/mnt/dd.txt status=none\nrun /mnt/bin/nc\n",
-                work, "symlink", net=False, settle=10.0,
-            )
-            symlink = session_lines(symlink_log)
-            symlink_joined = "\n".join(symlink)
-            for expected in ("10.0.2.2 -> 10.0.2.2", "counter=1000",
-                             "dd-payload", "usage: nc"):
-                if expected not in symlink_joined:
-                    raise Failure(f"{expected!r} missing from the symlink session\n{symlink_joined}")
+            # Two NIC-less boots: the console input is typed one byte at a
+            # time and the kernel's receive buffer is small, so a single boot
+            # with seven commands is longer than the settle window reliably
+            # covers. Each boot checks the symlinks it was given.
+            symlink_sessions: list[tuple[str, str, tuple[str, ...]]] = [
+                (
+                    "symlink-old",
+                    "cd /mnt\nrun /mnt/bin/dns 10.0.2.2\nrun /mnt/bin/threads\n",
+                    ("10.0.2.2 -> 10.0.2.2", "counter=1000"),
+                ),
+                (
+                    "symlink-new",
+                    "cd /mnt\nrun /mnt/bin/dd if=/mnt/dd.txt status=none\n"
+                    "run /mnt/bin/nc\n"
+                    "run /mnt/bin/iconv -f ascii -t utf8 /mnt/hello.txt\n"
+                    "run /mnt/bin/printenv\n",
+                    ("dd-payload", "usage: nc", "hello", "PWD=/mnt"),
+                ),
+            ]
+            symlink_blocks: list[tuple[str, list[str]]] = []
+            for tag, keys, expected in symlink_sessions:
+                symlink_log = boot(
+                    args.runner, args.kernel, disk, keys,
+                    work, tag, net=False, settle=10.0,
+                )
+                symlink = session_lines(symlink_log)
+                symlink_joined = "\n".join(symlink)
+                for needle in expected:
+                    if needle not in symlink_joined:
+                        raise Failure(
+                            f"{needle!r} missing from the {tag} session\n{symlink_joined}"
+                        )
+                symlink_blocks.append((tag, symlink))
 
         # The installer's on-disk result, read by an independent tool.
         listing = subprocess.run(
@@ -277,14 +299,15 @@ def run() -> int:
             f"Package: `repo/index` -> `{package['name']} {version}`, "
             f"{package['size']} bytes, SHA-256 `{package['sha256']}`,",
             f"payload {payload} bytes, {len(commands)} commands.",
-            "The disk starts empty except for `abc.txt` and `hello.txt`; there is no",
-            "pre-installed `paghbox`.",
+            "The disk starts empty except for the fixtures `abc.txt`, `hello.txt`,",
+            "`dd.txt` and `crlf.txt`; there is no pre-installed `paghbox`.",
             "",
-            "Boot 1 installs from the freshly built `repo/`; boot 2 reuses the same disk",
-            "without a NIC and runs installer-created symlinks, including the new",
-            "`dd` and `nc` applets, the 1.10.0 `dns` resolver and the 1.9.0",
-            "`threads` demo. `dd` is a real copy (`dd-payload`); `nc` with no",
-            "arguments must print its usage and exit 2.",
+            "Boot 1 installs from the freshly built `repo/`; boots 2 and 3 reuse the",
+            "same disk without a NIC and run installer-created symlinks. Boot 2",
+            "checks the earlier applets (`dns`, `threads`), boot 3 the new ones:",
+            "`dd` is a real copy (`dd-payload`); `nc` with no arguments prints its",
+            "usage and exits 2; `iconv` converts ASCII -> UTF-8 (`hello`);",
+            "`printenv` shows `PWD=/mnt`.",
             "",
             "```text",
             "==== install ====",
@@ -292,8 +315,13 @@ def run() -> int:
             "```",
             "",
             "```text",
-            "==== symlink (no NIC) ====",
-            *symlink,
+            "==== symlink-old (no NIC) ====",
+            *symlink_blocks[0][1],
+            "```",
+            "",
+            "```text",
+            "==== symlink-new (no NIC) ====",
+            *symlink_blocks[1][1],
             "```",
             "",
             f"`debugfs -R 'ls -l /bin' disk.img` shows the installed `paghbox` inode",
