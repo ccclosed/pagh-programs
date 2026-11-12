@@ -2,7 +2,7 @@
 
 Репозиторий портов: программы написаны **под нативный API `libpagh`**
 (соседний checkout `../pagh-api`), а не под Linux-совместимый слой. Один
-busybox-style ELF `paghbox` содержит 128 applet; `tools/build_repo.py`
+busybox-style ELF `paghbox` содержит 131 applet; `tools/build_repo.py`
 упаковывает его в `.ppkg` и пишет `repo/index`. Установщик `pkg` в ядре
 pagh-riscv — потребитель этого репозитория: скачивает пакет по HTTP, сверяет
 SHA-256/размер, ставит ELF в `/mnt/bin` и создаёт симлинки на команды.
@@ -10,12 +10,12 @@ SHA-256/размер, ставит ELF в `/mnt/bin` и создаёт симл�
 ## Структура
 
 ```
-catalog.md                 целевые 120 программ + 8 сверх цели (128 [x])
+catalog.md                 целевые 120 программ + 11 сверх цели (131 [x])
 docs/package-format.md     формат .ppkg и index (контракт с ядром)
 programs/                  crate paghbox: dispatch + applets/
   src/main.rs              argv[0]/`paghbox <applet>` + exit codes
   src/util.rs              EAGAIN-retry, Input, which/spawn/wait, duration
-  src/applets/             128 модулей:
+  src/applets/             131 модулей:
                            echo true false yes pwd basename dirname seq
                            cat wc head tail ls stat uname hostname arch nproc sleep
                            uptime date cal readlink realpath uniq sort nl fold expand
@@ -32,12 +32,14 @@ programs/                  crate paghbox: dispatch + applets/
                            type time exit nice more nm readelf
                            nc dd (1.11.0)
                            dos2unix unix2dos iconv printenv (1.12.0)
+                           ps free df (1.13.0; нужен ABI с /proc и statfs)
                            uname-родственные: uuidgen paghfetch
                            (+ bre/codec/digest/elf/hashsum/httpc/uu helpers)
 tools/build_repo.py        cargo build -> .ppkg -> index, и --check
 tools/live_test_1100.py    QEMU live suite 1.10.0 (27 загрузок, 65 проверок)
 tools/live_test_1110.py    QEMU live suite 1.11.0 (28 загрузок, 68 проверок)
 tools/live_test_1120.py    QEMU live suite 1.12.0 (42 загрузки, 99 проверок)
+tools/live_test_1130.py    QEMU live suite 1.13.0 (тестовое ядро feat/statfs)
 tools/live_pkg_install.py  pkg install -> /mnt/bin + debugfs (транскрипт)
 tools/live_test_180.py     QEMU live suite 1.8.0 (13 загрузок; история)
 repo/                      сгенерировано, в git не входит (см. ниже)
@@ -59,7 +61,7 @@ python3 tools/build_repo.py --check
 ```
 
 `build_repo.py` без аргументов сам вызывает cargo, затем пишет
-`repo/pkg/paghbox-1.12.0.ppkg` и `repo/index`. `--elf PATH` упаковывает готовый
+`repo/pkg/paghbox-1.13.0.ppkg` и `repo/index`. `--elf PATH` упаковывает готовый
 ELF, `--no-build` берёт стандартный путь без cargo, `--check` только
 перечитывает index/пакеты и проверяет magic, длины, манифест, SHA-256, размер
 payload'а и отсутствие «осиротевших» `.ppkg`.
@@ -113,7 +115,7 @@ payload по SHA-256/размеру **до** записи и создаёт си
 `16 + manifest_len + payload_len`. `--check` проверяет именно такую трактовку;
 это же зафиксировано в [`docs/package-format.md`](docs/package-format.md).
 
-## Applet'ы (128)
+## Applet'ы (131)
 
 | Команда | Что делает | Коды выхода |
 |---|---|---|
@@ -245,6 +247,9 @@ payload по SHA-256/размеру **до** записи и создаёт си
 | `unix2dos` | LF→CRLF на месте; существующий CRLF не удваивается (идемпотентно); общий код с `dos2unix` | 0; 1; 2 |
 | `iconv` | `-f FROM -t TO [-o FILE] [FILE]`, `-l`; UTF-8/ASCII/ISO-8859-1/UTF-16LE/UTF-16BE, fail-closed: невалидный вход/непарный суррогат/непредставимый символ — ошибка, не замена | 0; 1 (конверсия/IO); 2 (usage/неизвестный charset/два операнда) |
 | `printenv` | `envp` как есть (`printenv` → `PWD=/mnt`), `printenv NAME...` → значения; отсутствующее имя → exit 1 (молча) | 0; 1; 2 |
+| `ps` | таблица `PID TTY STAT COMMAND` из `/proc/<pid>/{stat,cmdline}`; `TTY` — `?` (tty в ABI нет); `--uptime` печатает `/proc/uptime` (расширение порта) | 0; 1 (`/proc` нет/не читается); 2 |
+| `free` | `/proc/meminfo`: `total/used/free/shared/buff/cache/available`; `-b/-k/-m/-g/-h`; `shared`/`buff/cache`/`Swap` — честные нули (счётчиков нет) | 0; 1 (meminfo/ключи); 2 |
+| `df` | `/proc/mounts` + нативный `statfs(43)` (96-байтный `Statfs`): `Filesystem 1K-blocks Used Available Use% Mounted on`, `-h`, `-k`; тех же чисел из «устройства» в ABI нет — в колонке тип ФС | 0; 1 (statfs/чтение); 2 |
 
 
 `cat/wc/head/tail` и новые файловые фильтры читают через `libpagh`: `read` на
@@ -273,26 +278,33 @@ QEMU; живым запуском проверен его разбор аргу�
 
 Сборка: `cargo build --release --target riscv64gc-unknown-none-elf` даёт
 статический RV64 ELF; `python3 tools/build_repo.py` пишет
-`repo/pkg/paghbox-1.12.0.ppkg`, а `python3 tools/build_repo.py --check` зелёный.
-Пакет `paghbox 1.12.0` содержит 128 команд; его размер и SHA-256 приведены в
+`repo/pkg/paghbox-1.13.0.ppkg`, а `python3 tools/build_repo.py --check` зелёный.
+Пакет `paghbox 1.13.0` содержит 131 команду; его размер и SHA-256 приведены в
 разделе [`repo/`](#repo-и-воспроизводимость) ниже. `MAX_COMMANDS = 160` в
-установщике 0.21.0 с запасом покрывает 128.
+установщике с запасом покрывает 131.
 
-Живой прогон 1.12.0 сделан на **release-ядре 0.21.1**
-(`/home/oleg/pagh-riscv/target/.../release/pagh`; `uname` печатает version
-0.21.1), QEMU `virt`, 256 MiB, диск 64 MiB ext2
+Живой прогон 1.13.0 сделан на **тестовом ядре 0.24.0 из ветки `feat/statfs`**
+(pagh-riscv PR #9 `/proc`, #10 per-pid `/proc`, #11 `statfs(43)`/`fstatfs(44)`;
+worktree `/home/oleg/pagh-riscv-feat`, собран **только на чтение** в `/tmp`:
+`rsync -a --exclude=target --exclude=.git ... /tmp/riscv-feat-src/ && cargo build
+--locked --release`). QEMU `virt`, 256 MiB, диск 64 MiB ext2
 (`mke2fs -q -t ext2 -F -b 4096 -d rootfs disk.img 64M`), NIC в QEMU user network
 для сетевых кейсов. Драйвер —
-[`tools/live_test_1120.py`](tools/live_test_1120.py): он переиспользует кейсы
-1.8.0, сетевые кейсы 1.10.0 и `dd`/`nc` 1.11.0 как регрессию и добавляет
-`dos2unix`, `unix2dos`, `iconv` (latin1↔UTF-8, UTF-16LE/BE, fail-closed) и
-`printenv`. **42 загрузки по 1–3 короткие команды** (вход одной загрузки
-≤ 150 байт — буфер консоли ядра не принимает длинную очередь ввода, драйвер это
-проверяет), после каждой сверяются вывод, код и
-`run: /mnt/paghbox exited with code N`. Итог: **99 PASS, 0 FAIL**. Сырой
-транскрипт — [`docs/live-1.12.0-transcript.txt`](docs/live-1.12.0-transcript.txt).
+[`tools/live_test_1130.py`](tools/live_test_1130.py): он переиспользует кейсы
+1.8.0/1.10.0/1.11.0/1.12.0 как регрессию и добавляет `ps`, `free`, `df`
+(включая `ps` с живым вторым процессом через `timeout`, `free` с проверкой
+инвариантов `used+free==total`, `used==total-free`, `available==free`, `df`
+для `/proc`/`/mnt` и отказы `df /`, `df /nope`). Последняя загрузка — на
+**старом ядре 0.21.1**: там `ps`/`free`/`df` обязаны честно сказать, что
+`/proc`/meminfo/statfs нет, а не печатать выдуманную таблицу.
+**51 загрузка** (50 на новом ядре + 1 на старом), после каждой сверяются вывод,
+код и `run: /mnt/paghbox exited with code N`. Итог: **117 PASS, 0 FAIL**. Сырой
+транскрипт — [`docs/live-1.13.0-transcript.txt`](docs/live-1.13.0-transcript.txt).
 
-История: 1.11.0 — 28 загрузок, **68 PASS** (`dd`/`nc`) —
+История: 1.12.0 — 42 загрузки, **99 PASS**
+(`dos2unix`/`unix2dos`/`iconv`/`printenv`) —
+[`docs/live-1.12.0-transcript.txt`](docs/live-1.12.0-transcript.txt); 1.11.0 —
+28 загрузок, **68 PASS** (`dd`/`nc`) —
 [`docs/live-1.11.0-transcript.txt`](docs/live-1.11.0-transcript.txt); 1.10.0 —
 27 загрузок, **65 PASS** на ядре 0.21.0 —
 [`docs/live-1.10.0-transcript.txt`](docs/live-1.10.0-transcript.txt).
@@ -303,11 +315,16 @@ QEMU; живым запуском проверен его разбор аргу�
 > page fault. Release-ядро рукопожатие проводит; прогон поэтому на release (как и
 > `docs/live-tls.txt` самого ядра). Это ограничение debug-сборки, не `paghbox`.
 
-Сырые транскрипты: [`docs/live-1.12.0-transcript.txt`](docs/live-1.12.0-transcript.txt)
-(42 загрузки, 99 проверок) и
+Сырые транскрипты: [`docs/live-1.13.0-transcript.txt`](docs/live-1.13.0-transcript.txt)
+(51 загрузка, 117 проверок) и
+[`docs/live-1.13.0-pkg-install.txt`](docs/live-1.13.0-pkg-install.txt)
+(`pkg install` 1.13.0: 131 симлинк, `debugfs`; снимается
+[`tools/live_pkg_install.py`](tools/live_pkg_install.py) на тестовом ядре
+`feat/statfs`). История 1.12.0 —
+[`docs/live-1.12.0-transcript.txt`](docs/live-1.12.0-transcript.txt) (42 загрузки,
+99 проверок) и
 [`docs/live-1.12.0-pkg-install.txt`](docs/live-1.12.0-pkg-install.txt)
-(`pkg install` 1.12.0: 128 симлинков, `debugfs`; снимается
-[`tools/live_pkg_install.py`](tools/live_pkg_install.py)). История 1.11.0 —
+(`pkg install` 1.12.0: 128 симлинков). 1.11.0 —
 [`docs/live-1.11.0-transcript.txt`](docs/live-1.11.0-transcript.txt) (28 загрузок,
 68 проверок) и
 [`docs/live-1.11.0-pkg-install.txt`](docs/live-1.11.0-pkg-install.txt)
@@ -363,21 +380,24 @@ QEMU; живым запуском проверен его разбор аргу�
 | `dos2unix`/`unix2dos` | `crlf.txt` (17 B) → 14 B, `cat` → 3 строки; одинокий `\r` сохранён (`cmp` с эталоном); `unix2dos` дважды идемпотентен, `cmp` с CRLF-эталоном → 0 |
 | `iconv` | latin1→UTF-8 → `café`; UTF-8→latin1 `-o` + `cmp` с original → 0; UTF-8↔UTF-16LE/BE round-trip через `cmp`; UTF-8→ASCII на `latin1.txt` → 1 (`invalid input for UTF-8 at byte 3`), на `utf8.txt` → 1 (`cannot convert U+00E9 to ASCII`); неизвестный charset → 2; `-l` → 5 строк |
 | `printenv` | `printenv` → `PWD=/mnt`; `printenv PWD` → `/mnt`; `printenv NOPE` → exit 1 без вывода; `PWD NOPE` → `/mnt` + exit 1; `-- PWD` → `/mnt`; `-x` → 2 |
-| `pkg install` | `pkg: installed paghbox 1.12.0`; 128 симлинков (+ `paghbox` = 129 имён); `debugfs` сверяет inode; `/mnt/bin/dd`, `/mnt/bin/nc`, `/mnt/bin/iconv`, `/mnt/bin/dns` и `/mnt/bin/threads` работают |
+| `pkg install` | `pkg: installed paghbox 1.13.0`; 131 симлинк (+ `paghbox` = 132 имени); `debugfs` сверяет inode; `/mnt/bin/ps`, `/mnt/bin/free`, `/mnt/bin/df`, `/mnt/bin/iconv`, `/mnt/bin/dd`, `/mnt/bin/nc`, `/mnt/bin/dns` и `/mnt/bin/threads` работают |
+| `ps`/`free`/`df` (ядро 0.24) | `ps` — шапка + строка себя и второй процесс через `timeout 5 paghbox ps`; `ps --uptime` → `uptime: X.XXs`; `free` — `Mem:` 262144 kB, `used+free==total`, `available==free`, `shared`/`buff-cache`/`Swap` = 0, `-m` → 256, `-h` → `256.0M`; `df` — `procfs 0 0 0 - /proc`, `ext2 65536 … /mnt`, `-h` → `64.0M`, `df /` → `not supported` (1), `df /nope` → `No such file` (1); на старом ядре 0.21.1 все три честно отказываются |
 
-В 1.12.0 `pkg install paghbox` проверен на чистом 64 MiB ext2 с `repo/` на
-хосте: `pkg: installed paghbox 1.12.0`, затем boot без NIC
-`run /mnt/bin/dns 10.0.2.2` → `10.0.2.2 -> 10.0.2.2`,
-`run /mnt/bin/threads` → `counter=1000`,
-`run /mnt/bin/dd if=/mnt/dd.txt status=none` → `dd-payload`,
-`run /mnt/bin/nc` → `usage: nc` (exit 2) и
-`run /mnt/bin/iconv -f latin1 -t utf8 /mnt/latin1.txt` → `café`;
-`debugfs -R 'ls -l /bin'` показывает `paghbox` (951928 байт payload) и
-128 симлинков (129 имён). Транскрипт воспроизводится командой
+В 1.13.0 `pkg install paghbox` проверен на чистом 64 MiB ext2 с `repo/` на
+хосте, на тестовом ядре `feat/statfs` (0.24.0): `pkg: installed paghbox
+1.13.0`, затем boot без NIC — `run /mnt/bin/dns 10.0.2.2`,
+`run /mnt/bin/threads`, `run /mnt/bin/dd if=/mnt/dd.txt status=none` →
+`dd-payload`, `run /mnt/bin/nc` → `usage: nc` (exit 2),
+`run /mnt/bin/iconv -f ascii -t utf8 /mnt/hello.txt` → `hello`,
+`run /mnt/bin/printenv` → `PWD=/mnt`, и новая загрузка
+`run /mnt/bin/free` → `Mem:`, `run /mnt/bin/ps` → шапка таблицы,
+`run /mnt/bin/df` → `procfs`. `debugfs -R 'ls -l /bin'` показывает `paghbox`
+(987104 байта payload по индексу 1.13.0) и 131 симлинк (132 имени). Транскрипт
+воспроизводится командой
 [`tools/live_pkg_install.py`](tools/live_pkg_install.py) — это единственный
 воспроизводимый pkg-install драйвер в репозитории. `build_repo.py --check`
-подтверждает пакет, 128 команд и согласованность манифеста;
-`MAX_COMMANDS = 160` покрывает 128.
+подтверждает пакет, 131 команду и согласованность манифеста;
+`MAX_COMMANDS = 160` покрывает 131.
 
 ## Ограничения среды и ABI
 
@@ -447,6 +467,27 @@ QEMU; живым запуском проверен его разбор аргу�
 * **`printenv`:** печатает ровно `envp` процесса — на этом ядре это
   `PWD=<cwd>`; ничего не «додумывает» (нет `/etc/environment`, нет login-шелла).
   `printenv NAME` с отсутствующим именем молчит и возвращает 1, как GNU.
+* **`ps`: нужен procfs.** Читает `/proc` (pagh-riscv PR #9/#10, 0.22/0.23);
+  на ядре без `/proc` честно печатает `ps: /proc: No such file or directory ...`
+  и выходит 1. Колонки — `PID TTY STAT COMMAND`; `TTY` всегда `?`, потому что
+  tty/controlling terminal/process group в ABI нет; `TIME`/`START` нет, потому
+  что `/proc/<pid>/stat` не содержит времени старта (выдумывать нельзя);
+  `COMMAND` — argv-снимок из `cmdline`, для пустого — `[comm]`. Kernel-потоки
+  (`/proc/kthreads/<tid>`) — не процессы и не показываются. `--uptime` —
+  расширение порта, печатает `/proc/uptime` (`uptime: X.XXs`).
+* **`free`:** только `/proc/meminfo`; `shared` и `buff/cache` — **0**, потому
+  что таких счётчиков и page cache в ядре нет (meminfo: `MemAvailable ==
+  MemFree`); `Swap` — 0, swap-подсистемы нет. `used = total - free`.
+  Поддержаны `-b/-k/-m/-g/-h`; `-t`/`-w`/`-s` нет. На ядре без meminfo — отказ.
+* **`df`:** `/proc/mounts` + нативный `statfs(43)`/`fstatfs`-ABI (pagh-riscv PR
+  #11, 0.24.0). В ABI **нет имён устройств**: в `/proc/mounts` поле device — это
+  mount point, поэтому колонка `Filesystem` показывает тип ФС (`ext2`,
+  `procfs`), а не выдуманное `/dev/...`; `Mounted on` — путь. `procfs` с
+  нулевой ёмкостью печатается как `0`/`-` (это правда, а не заглушка).
+  `Use%` округляется вверх. `libpagh` 0.6.1 ещё не описывает `statfs`, поэтому
+  applet делает сырой `ecall` (`programs/src/applets/statfs_sys.rs`,
+  контракт и SAFETY там же); на ядре без 43/44 — `Function not implemented`.
+  Поддержаны `-h`/`-k`; `-i`/`-T`/`-a` нет.
 * **`split`/`csplit`:** суффиксы ограничены двумя символами (676 alphabetic
   или 100 numeric частей); у `csplit` только `N`, `/RE/`, `-f`, `-n`, `-s`
   (нет `%RE%`, смещений `/RE/+N` и `{N}`). `fmt` не сохраняет отступы
@@ -465,8 +506,9 @@ QEMU; живым запуском проверен его разбор аргу�
   Отсутствие seed'а энтропии, часов или сети — это отказ TLS-рукопожатия
   (exit 1), а не обход проверки.
 * **`kill`:** ABI адресует поток (`pid > 0` — tid), группу (`0`) и весь run
-  (`-1`); перечисления процессов в ABI по-прежнему нет, поэтому `pgrep`/`pkill`
-  не портированы. С `libpagh` 0.6.1 (`pagh-api` PR #1) ESRCH отображается в
+  (`-1`). Перечисления процессов в ABI 0.21.0 не было, поэтому `pgrep`/`pkill`
+  не портированы; с procfs (0.22+) `pgrep` стал реализуем, но в набор пока не
+  входит — эта волна ограничена `ps`/`free`/`df`. С `libpagh` 0.6.1 (`pagh-api` PR #1) ESRCH отображается в
   `Errno::ESRCH`, и чужой pid печатается как `No such process`; applet больше
   не подменяет `Errno::Unknown`. Шелл не раскрывает `$$`; безопасная проба —
   `kill -0 0`.
@@ -553,49 +595,53 @@ QEMU; живым запуском проверен его разбор аргу�
   (sysname/nodename/release/machine), uptime, `nproc=1` и PWD. Названия
   дистрибутива, модели CPU, объёма RAM и числа пакетов не выдумываются;
   `release` — поле uname (0.10.0, ABI baseline), а не версия сборки ядра
-  (0.21.0; версия пакета ядра живёт в поле `version`, которое `paghfetch` не
-  печатает).
+  (0.24.0 на тестовом ядре `feat/statfs`; версия пакета ядра живёт в поле
+  `version`, которое `paghfetch` не печатает).
 * **`exit`** вызывает `sys::exit`, то есть завершает весь `paghbox`; это
   осмысленно только как entry point. `command`/`type` не знают builtins —
   только файлы в фиксированном поиске.
 * **Ядро 0.21.x** даёт fork/exec/wait, файловые мутации, mmap, pipes, poll,
   TCP/UDP-сокеты, threads, signals, `getrandom` и TLS 1.3-сессии, но `paghbox`
   остаётся набором CLI-фильтров: шелл ядра не создаёт конвейеров, а `pkg`
-  ставит один bundle. Соседние репозитории (`pagh-riscv`, `pagh-api`) не
-  изменялись этой работой; пакет 1.12.0 собран против `libpagh` 0.6.1
-  (`pagh-api` main `b203ea6`). Сборка на 0.6.0 тоже проверена — исходники
-  собираются с обеими версиями `Errno` (kill больше не ссылается на
-  `Errno::Unknown`).
+  ставит один bundle. **Новое в этой волне:** тестовое ядро 0.24.0 из ветки
+  `feat/statfs` (PR #9 `/proc`, #10 per-pid `/proc`, #11 `statfs`) добавляет
+  read-only `/proc` и нативный `statfs(43)`; `ps`/`free`/`df` — их первые
+  потребители в userland. Эти PR пока **не влиты** в pagh-riscv main, поэтому
+  пакет 1.13.0 документирует требование «ядро с procfs/statfs» и на старом
+  ядре applets отказываются честно (проверено отдельной загрузкой в
+  транскрипте). Соседние репозитории этой работой не изменялись; пакет 1.13.0
+  собран против `libpagh` 0.6.1 (`pagh-api` main `b203ea6`), `statfs` вызывается
+  сырым `ecall` (libpagh 0.6.1 этого ABI ещё не описывает).
 
 ## `repo/` и воспроизводимость
 
 `target/` и `repo/` в [`.gitignore`](.gitignore): бинарники не коммитятся.
 `repo/` собирается командой `python3 tools/build_repo.py` из исходников и
 пинованного тулчейна. На этом дереве с зафиксированным `pagh-api` (см. ниже)
-пакет **побайтно воспроизводится** — проверено: payload `225a9af4…`, `.ppkg`
-`c08ee296…`, 952921 байт. Индекс детерминирован по содержимому, а ELF зависит
+пакет **побайтно воспроизводится** — проверено: payload `c593694e…`, `.ppkg`
+`4a84a0d4…`, 988108 байт. Индекс детерминирован по содержимому, а ELF зависит
 ещё и от абсолютного пути checkout'ов: rustc встраивает пути
 `../pagh-api/libpagh/...` в panic-locations, поэтому сборка в другом каталоге
 даёт другой SHA. Именно поэтому CI сверяет только согласованность индекса/пакета
 (`build_repo.py --check`) и фигуры в доке (`tools/check_docs.py`), а не цифры
-payload'а. Текущий пакет — 951928 байт payload / 952921 байт `.ppkg`, 128
-команд, SHA-256
-`c08ee296c56420dcdc227130c9dc761204306fdb680d8d5ce2fa18748b47d265`; в git он
+payload'а. Текущий пакет — 987104 байта payload / 988108 байт `.ppkg`, 131
+команда, SHA-256
+`4a84a0d4deb1c7e5ca49ea594668637921f08b21d0578493a7a808c54c5eae92`; в git он
 не попал (`.gitignore`), его место — HTTP-зеркало
 [`pagh-repo`](https://github.com/ccclosed/pagh-repo).
 
 `catalog.md` — 120 целевых имён + `threads`, `dns`, `nc`, `dd`, `dos2unix`,
-`unix2dos`, `iconv`, `printenv`; `[x]` стоят у всех 128 реализованных, `[ ]`
-не осталось. Список сходится с `NAMES` и `commands=` пакета (`grep`-проверка в
-этом разделе), а живой прогон
-[`tools/live_test_1120.py`](tools/live_test_1120.py) даёт 39 загрузок:
-регрессия 1.8.0/1.10.0/1.11.0 плюс четыре новых applet'а (93 PASS).
+`unix2dos`, `iconv`, `printenv`, `ps`, `free`, `df`; `[x]` стоят у всех 131
+реализованного, `[ ]` не осталось. Список сходится с `NAMES` и `commands=`
+пакета (`grep`-проверка в этом разделе), а живой прогон
+[`tools/live_test_1130.py`](tools/live_test_1130.py) даёт 51 загрузку: регрессия
+1.8.0–1.12.0 плюс `ps`/`free`/`df` (117 PASS).
 
 Зависимость `libpagh` — path-зависимость на соседний checkout `pagh-api`, и
 `Cargo.lock` не фиксирует её содержимое: при сдвиге `pagh-api` main меняется ELF
-и SHA пакета. Пакет 1.12.0 собран против `libpagh` 0.6.1 — `pagh-api` main на коммите
+и SHA пакета. Пакет 1.13.0 собран против `libpagh` 0.6.1 — `pagh-api` main на коммите
 `b203ea6`; payload SHA-256
-`225a9af4f7b65050bcc627e3543548ec44126882c46790c2ff54285808e343c3`. Для
+`c593694e8d0680a6c12088347067ee70fbfb6be684f7d5237541e71de2c5061c`. Для
 побайтного воспроизведения нужны: этот репозиторий в `/home/oleg/pagh-programs`,
 `pagh-api` соседом в `/home/oleg/pagh-api` на указанном коммите и тот же
 тулчейн. Сборка против `libpagh` 0.6.0 (`ed37c1d`) тоже проходит — обе версии `Errno`

@@ -1,5 +1,197 @@
 # Живые прогоны paghbox
 
+## 1.13.0 (procfs/statfs: ps, free, df)
+
+Дата: ночь 2026-11-12/13. Ядро — **тестовое 0.24.0 из ветки `feat/statfs`**
+(worktree `/home/oleg/pagh-riscv-feat`, head `1e137d8`), которая стекает три
+PR pagh-riscv: #9 `/proc` (`meminfo`/`cpuinfo`/`uptime`/`version`/`mounts`/
+`tasks`/`net`), #10 per-pid `/proc` (`<pid>/{status,stat,cmdline}`, `self`,
+`kthreads`) и #11 `statfs(43)`/`fstatfs(44)` с нативным 96-байтным `Statfs`.
+Исходники ядра только читались: копия `rsync --exclude=target --exclude=.git`
+в `/tmp/pagh-night2/riscv-feat-src`, сборка `cargo build --locked --release` там
+же. QEMU `qemu-system-riscv64` 10.2.2, `virt`, 256 MiB, диск 64 MiB ext2
+(`mke2fs -q -t ext2 -F -b 4096 -d rootfs disk.img 64M`), NIC в user network для
+сетевых кейсов регрессии.
+
+Драйвер — [`tools/live_test_1130.py`](../tools/live_test_1130.py): **51
+загрузка** (50 на новом ядре + 1 на старом release-ядре 0.21.1), по 1–3
+короткие команды, после каждой сверяются вывод, `run: /mnt/paghbox exited with
+code N` и валидаторы таблиц. Состав: регрессия 1.8.0–1.12.0 (42 загрузки,
+99 проверок) + новые `ps`/`free`/`df` (8 загрузок, 15 проверок) + загрузка
+honest-refusal на старом ядре (3 проверки). Итог: **117 PASS, 0 FAIL**.
+
+Сырые транскрипты: [`live-1.13.0-transcript.txt`](live-1.13.0-transcript.txt) и
+[`live-1.13.0-pkg-install.txt`](live-1.13.0-pkg-install.txt)
+(`pkg install paghbox 1.13.0` на тестовом ядре: 131 симлинк + `paghbox`,
+`debugfs` сверяет inode; boot без NIC запускает `/mnt/bin/ps`, `/mnt/bin/free`,
+`/mnt/bin/df`).
+
+### Итог 1.13.0
+
+* `ps` — шапка `  PID TTY      STAT COMMAND` и строка самого процесса
+  (`/mnt/paghbox ps`); второй процесс виден через
+  `timeout 5 /mnt/paghbox ps` (parent timeout + child ps, валидатор требует обе
+  команды); `ps --uptime` → `uptime: X.XXs` из `/proc/uptime`; `ps -x` —
+  usage 2.
+* `free` — `Mem:` 262144 kB (256 MiB VM), `used + free == total`,
+  `available == free`, `shared`/`buff-cache` — 0, `Swap` — 0; `-m` даёт
+  MemTotal 256; `-h` → `256.0M`; `free -z` — usage 2. Валидатор разбирает
+  строку, а не сравнивает её с константой: цифры `used`/`free` живые.
+* `df` — `procfs` с нулевой ёмкостью на `/proc` и `ext2` с `1K-blocks=65536`
+  на `/mnt` (64 MiB образ), `-h` → `64.0M`; `df /proc` и `df /mnt` — те же
+  строки по операнду; `df /` → `df: /: Operation not supported` (1),
+  `df /nope` → `No such file or directory` (1), `df -x` — usage 2.
+* Регрессия 1.8.0/1.10.0/1.11.0/1.12.0 на новом ядре — без изменений.
+* **Honest refusal на старом ядре 0.21.1:** `ps` → `ps: /proc: No such file or
+  directory (the kernel needs the procfs ABI)` (1), `free` → `free:
+  /proc/meminfo: No such file or directory` (1), `df /mnt` → `df: /mnt:
+  Function not implemented` (1). Ни одна из трёх команд не печатает
+  выдуманную таблицу.
+
+### Чем проверка ограничена (1.13.0)
+
+* Тестовое ядро — **ветка**, а не main: PR #9/#10/#11 открыты; транскрипт
+  фиксирует путь `/tmp/pagh-night2/riscv-feat-src` и head ветки. `libpagh`
+  0.6.1 (`pagh-api` main `b203ea6`) ещё не описывает `statfs`/procfs —
+  `ps`/`free` читают `/proc` обычным `openat`/`read`, `df` делает сырой
+  `ecall` в `statfs_sys.rs` с задокументированным 96-байтным контрактом.
+* `ps`: TTY всегда `?` — tty/controlling terminal/process group в ABI нет;
+  `TIME`/`START` нет — `/proc/<pid>/stat` не содержит времени старта; kernel
+  threads (`/proc/kthreads/<tid>`) — не процессы и в таблицу не входят.
+* `free`: `shared`/`buff/cache` — 0, потому что таких счётчиков (и page
+  cache) в ядре нет; `MemAvailable == MemFree` — так рендерит ядро; `Swap` —
+  0, swap-подсистемы нет. Это не заглушки, а значение «счётчика нет».
+* `df`: имён устройств в ABI нет (в `/proc/mounts` поле device — mount point),
+  поэтому `Filesystem` — тип ФС; `Use%` округляется вверх; у `procfs` ёмкость
+  ноль, `Use%` — `-`.
+* Старый kernel-кейс требует наличия release-бинаря 0.21.1 в
+  `/home/oleg/pagh-riscv/target/...`; если его нет, драйвер пропускает
+  загрузку (`--no-legacy`).
+* TLS-кейсы 1.10.0 не повторяются (как и в 1.11.0/1.12.0): ABI не менялся,
+  полный TLS-прогон требует host-интернета.
+
+### PASS-строки 1.13.0
+
+```text
+PASS sha3 empty: run /mnt/paghbox sha3sum /mnt/empty.txt
+PASS sha3 abc: run /mnt/paghbox sha3sum /mnt/abc.txt
+PASS sha3 fox: run /mnt/paghbox sha3sum /mnt/fox.txt
+PASS sha3 -b: run /mnt/paghbox sha3sum -b /mnt/abc.txt
+PASS sha3 check: run /mnt/paghbox sha3sum -c /mnt/sums.sha3
+PASS sha3 bad check: run /mnt/paghbox sha3sum -c /mnt/sums.sha3.bad
+PASS sha3 status ok: run /mnt/paghbox sha3sum --status -c /mnt/sums.sha3
+PASS sha3 status bad: run /mnt/paghbox sha3sum --status -c /mnt/sums.sha3.bad
+PASS sha3 bad option: run /mnt/paghbox sha3sum -z
+PASS calc precedence: run /mnt/paghbox calc 2+3*4
+PASS calc parentheses: run /mnt/paghbox calc (2+3)*4
+PASS calc unary minus: run /mnt/paghbox calc -5+2
+PASS calc divide by zero: run /mnt/paghbox calc 1/0
+PASS calc syntax: run /mnt/paghbox calc 2+
+PASS calc modulo zero: run /mnt/paghbox calc 7%0
+PASS calc two expressions: run /mnt/paghbox calc 1+1 2*3
+PASS calc eval: run /mnt/paghbox calc -e 10%3
+PASS base85 hello: run /mnt/paghbox base85 /mnt/hello.txt
+PASS base85 zero group: run /mnt/paghbox base85 /mnt/zeros.bin
+PASS base85 adobe: run /mnt/paghbox base85 -a /mnt/abc.txt
+PASS base85 decode hello: run /mnt/paghbox base85 -d /mnt/b85hello.txt
+PASS base85 decode adobe: run /mnt/paghbox base85 -d /mnt/b85adobe.txt
+PASS base85 invalid: run /mnt/paghbox base85 -d /mnt/b85bad.txt
+PASS readelf header: run /mnt/paghbox readelf /mnt/symbols.elf
+PASS readelf not elf: run /mnt/paghbox readelf -h /mnt/notelf.txt
+PASS readelf no operand: run /mnt/paghbox readelf
+PASS readelf sections: run /mnt/paghbox readelf -S /mnt/symbols.elf
+PASS readelf symbols: run /mnt/paghbox readelf -s /mnt/symbols.elf
+PASS readelf program headers: run /mnt/paghbox readelf -l /mnt/symbols.elf
+PASS readelf bad section file: run /mnt/paghbox readelf -S /mnt/notelf.txt
+PASS readelf bad option: run /mnt/paghbox readelf -z /mnt/symbols.elf
+PASS uuidgen default: run /mnt/paghbox uuidgen
+PASS uuidgen count: run /mnt/paghbox uuidgen -n 3
+PASS uuidgen bad count: run /mnt/paghbox uuidgen -n x
+PASS paghfetch: run /mnt/paghbox paghfetch
+PASS paghfetch usage: run /mnt/paghbox paghfetch x
+PASS threads counter: run /mnt/paghbox threads
+PASS threads usage: run /mnt/paghbox threads -x
+PASS uuidgen entropy: run /mnt/paghbox uuidgen -n 4
+PASS shuf entropy: run /mnt/paghbox shuf -e a b c d e
+PASS kill -0 group: run /mnt/paghbox kill -0 0
+PASS kill no such pid: run /mnt/paghbox kill 99999
+PASS kill bad pid: run /mnt/paghbox kill abc
+PASS dns literal: run /mnt/paghbox dns 10.0.2.2
+PASS dns usage: run /mnt/paghbox dns -z
+PASS dns missing host: run /mnt/paghbox dns
+PASS curl http: run /mnt/paghbox curl http://10.0.2.2:55979/h
+PASS curl http -i: run /mnt/paghbox curl -i http://10.0.2.2:55979/h
+PASS wget http: run /mnt/paghbox wget -O h.out http://10.0.2.2:55979/h
+PASS cat wget output: run /mnt/paghbox cat h.out
+PASS curl chunked: run /mnt/paghbox curl http://10.0.2.2:55979/chunked
+PASS curl chunked -i: run /mnt/paghbox curl -i http://10.0.2.2:55979/chunked
+PASS dd copy: run /mnt/paghbox dd if=/mnt/abc.txt of=/mnt/ddcopy.txt
+PASS dd copy content: run /mnt/paghbox cat /mnt/ddcopy.txt
+PASS dd bs round trip: run /mnt/paghbox dd if=/mnt/fox.txt of=/mnt/fox.copy bs=8
+PASS dd bs content: run /mnt/paghbox cmp /mnt/fox.txt /mnt/fox.copy
+PASS dd notrunc existing: run /mnt/paghbox dd if=/mnt/abc.txt of=/mnt/fox.copy bs=4 conv=notrunc status=none
+PASS dd notrunc leaves tail: run /mnt/paghbox cmp /mnt/fox.txt /mnt/fox.copy
+PASS dd count block: run /mnt/paghbox dd if=/mnt/abc.txt bs=2 count=1 status=none
+PASS dd skip byte: run /mnt/paghbox dd if=/mnt/abc.txt bs=1 skip=1 status=none
+PASS dd bad size: run /mnt/paghbox dd bs=abc
+PASS dd missing input: run /mnt/paghbox dd if=/mnt/nope
+PASS dd unsupported conv: run /mnt/paghbox dd conv=fsync
+PASS nc no args: run /mnt/paghbox nc
+PASS nc unsupported -u: run /mnt/paghbox nc -u 10.0.2.2 80
+PASS nc client -p: run /mnt/paghbox nc -p 1234 10.0.2.2 80
+PASS nc client: run /mnt/paghbox nc 10.0.2.2 42809
+PASS nc client: run /mnt/paghbox nc 10.0.2.2 42809
+PASS nc listener: run /mnt/paghbox nc -l -p 7001
+PASS printenv all: run /mnt/paghbox printenv
+PASS printenv one: run /mnt/paghbox printenv PWD
+PASS printenv missing: run /mnt/paghbox printenv NOPE
+PASS printenv found and missing: run /mnt/paghbox printenv PWD NOPE
+PASS printenv --: run /mnt/paghbox printenv -- PWD
+PASS printenv bad option: run /mnt/paghbox printenv -x
+PASS dos2unix converts: run /mnt/paghbox dos2unix /mnt/crlf.txt
+PASS dos2unix content: run /mnt/paghbox cat /mnt/crlf.txt
+PASS dos2unix lone cr: run /mnt/paghbox dos2unix /mnt/lonecr.txt
+PASS dos2unix lone cr content: run /mnt/paghbox cmp /mnt/lonecr.txt /mnt/lonecr.expected
+PASS unix2dos converts: run /mnt/paghbox unix2dos /mnt/lf.txt
+PASS unix2dos idempotent: run /mnt/paghbox unix2dos /mnt/lf.txt
+PASS unix2dos content: run /mnt/paghbox cmp /mnt/lf.txt /mnt/lf.dos.expected
+PASS iconv ascii utf8: run /mnt/paghbox iconv -f ascii -t utf8 /mnt/hello.txt
+PASS iconv latin1 utf8 to file: run /mnt/paghbox iconv -f latin1 -t utf8 -o /mnt/u8out.txt /mnt/latin1.txt
+PASS iconv latin1 utf8 to file: run /mnt/paghbox iconv -f latin1 -t utf8 -o /mnt/u8out.txt /mnt/latin1.txt
+PASS iconv latin1 bytes: run /mnt/paghbox cmp /mnt/u8out.txt /mnt/utf8.txt
+PASS iconv utf8 to latin1: run /mnt/paghbox iconv -f utf8 -t latin1 -o /mnt/lat2.txt /mnt/utf8.txt
+PASS iconv latin1 bytes back: run /mnt/paghbox cmp /mnt/latin1.txt /mnt/lat2.txt
+PASS iconv utf8 to utf16le: run /mnt/paghbox iconv -f utf8 -t utf16le -o /mnt/u8le.txt /mnt/utf8.txt
+PASS iconv utf16le bytes: run /mnt/paghbox cmp /mnt/u8le.txt /mnt/utf16le.bin
+PASS iconv utf16be to utf8: run /mnt/paghbox iconv -f utf16be -t utf8 -o /mnt/u8be.txt /mnt/utf16be.bin
+PASS iconv utf16be bytes: run /mnt/paghbox cmp /mnt/u8be.txt /mnt/utf8.txt
+PASS iconv utf16le to utf8: run /mnt/paghbox iconv -f utf16le -t utf8 -o /mnt/u8le2.txt /mnt/utf16le.bin
+PASS iconv utf16le bytes back: run /mnt/paghbox cmp /mnt/u8le2.txt /mnt/utf8.txt
+PASS iconv invalid utf8: run /mnt/paghbox iconv -f utf8 -t ascii /mnt/latin1.txt
+PASS iconv unrepresentable: run /mnt/paghbox iconv -f utf8 -t ascii /mnt/utf8.txt
+PASS iconv no options: run /mnt/paghbox iconv
+PASS iconv bad charset: run /mnt/paghbox iconv -f klingon -t utf8 /mnt/utf8.txt
+PASS iconv -l: run /mnt/paghbox iconv -l
+PASS ps table: run /mnt/paghbox ps
+PASS ps uptime: run /mnt/paghbox ps --uptime
+PASS ps via timeout: run /mnt/paghbox timeout 5 /mnt/paghbox ps
+PASS ps bad option: run /mnt/paghbox ps -x
+PASS free default: run /mnt/paghbox free
+PASS free -m: run /mnt/paghbox free -m
+PASS free -h: run /mnt/paghbox free -h
+PASS free bad unit: run /mnt/paghbox free -z
+PASS df all: run /mnt/paghbox df
+PASS df -h: run /mnt/paghbox df -h
+PASS df /proc: run /mnt/paghbox df /proc
+PASS df /mnt: run /mnt/paghbox df /mnt
+PASS df synthetic root: run /mnt/paghbox df /
+PASS df missing path: run /mnt/paghbox df /nope
+PASS df bad option: run /mnt/paghbox df -x
+PASS ps without procfs: run /mnt/paghbox ps
+PASS free without meminfo: run /mnt/paghbox free
+PASS df without statfs: run /mnt/paghbox df /mnt
+```
+
 ## 1.12.0 (текстовые applet'ы: dos2unix, unix2dos, iconv, printenv)
 
 Дата: ночь 2026-11-12/13. Ядро:

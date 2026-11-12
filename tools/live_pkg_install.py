@@ -247,6 +247,12 @@ def run() -> int:
                     "run /mnt/bin/printenv\n",
                     ("dd-payload", "usage: nc", "hello", "PWD=/mnt"),
                 ),
+                (
+                    "symlink-proc",
+                    "cd /mnt\nrun /mnt/bin/free\nrun /mnt/bin/ps\n"
+                    "run /mnt/bin/df\n",
+                    ("Mem:", "PID TTY", "procfs"),
+                ),
             ]
             symlink_blocks: list[tuple[str, list[str]]] = []
             for tag, keys, expected in symlink_sessions:
@@ -302,12 +308,11 @@ def run() -> int:
             "The disk starts empty except for the fixtures `abc.txt`, `hello.txt`,",
             "`dd.txt` and `crlf.txt`; there is no pre-installed `paghbox`.",
             "",
-            "Boot 1 installs from the freshly built `repo/`; boots 2 and 3 reuse the",
+            "Boot 1 installs from the freshly built `repo/`; boots 2-4 reuse the",
             "same disk without a NIC and run installer-created symlinks. Boot 2",
-            "checks the earlier applets (`dns`, `threads`), boot 3 the new ones:",
-            "`dd` is a real copy (`dd-payload`); `nc` with no arguments prints its",
-            "usage and exits 2; `iconv` converts ASCII -> UTF-8 (`hello`);",
-            "`printenv` shows `PWD=/mnt`.",
+            "checks the earlier applets (`dns`, `threads`), boot 3 `dd`/`nc`/`iconv`/",
+            "`printenv`, boot 4 the procfs applets: `free` prints its `Mem:` row,",
+            "`ps` its table, `df` the `procfs` mount (the test kernel has /proc).",
             "",
             "```text",
             "==== install ====",
@@ -322,6 +327,11 @@ def run() -> int:
             "```text",
             "==== symlink-new (no NIC) ====",
             *symlink_blocks[1][1],
+            "```",
+            "",
+            "```text",
+            "==== symlink-proc (no NIC) ====",
+            *symlink_blocks[2][1],
             "```",
             "",
             f"`debugfs -R 'ls -l /bin' disk.img` shows the installed `paghbox` inode",

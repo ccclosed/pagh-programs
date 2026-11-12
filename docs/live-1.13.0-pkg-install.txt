@@ -1,0 +1,101 @@
+# paghbox 1.13.0: pkg install and symlink live check
+
+Host: `python3 tools/live_pkg_install.py` (serve.sh equivalent: an HTTP
+server on 127.0.0.1; the guest sees it as `10.0.2.2`).
+Guest: QEMU `virt`, kernel release `/tmp/pagh-night2/riscv-feat-src/target/riscv64gc-unknown-none-elf/release/pagh`, 64 MiB ext2, `--net`.
+Package: `repo/index` -> `paghbox 1.13.0`, 988108 bytes, SHA-256 `4a84a0d4deb1c7e5ca49ea594668637921f08b21d0578493a7a808c54c5eae92`,
+payload 987104 bytes, 131 commands.
+The disk starts empty except for the fixtures `abc.txt`, `hello.txt`,
+`dd.txt` and `crlf.txt`; there is no pre-installed `paghbox`.
+
+Boot 1 installs from the freshly built `repo/`; boots 2-4 reuse the
+same disk without a NIC and run installer-created symlinks. Boot 2
+checks the earlier applets (`dns`, `threads`), boot 3 `dd`/`nc`/`iconv`/
+`printenv`, boot 4 the procfs applets: `free` prints its `Mem:` row,
+`ps` its table, `df` the `procfs` mount (the test kernel has /proc).
+
+```text
+==== install ====
+pagh:rv64> cd /mnt
+pagh:rv64> pkg repo http://10.0.2.2:45945/
+pkg: repo http://10.0.2.2:45945/
+pagh:rv64> pkg index
+pkg: index 1 package(s)
+pagh:rv64> pkg install paghbox
+pkg: installed paghbox 1.13.0
+pagh:rv64> 
+```
+
+```text
+==== symlink-old (no NIC) ====
+pagh:rv64> cd /mnt
+pagh:rv64> run /mnt/bin/dns 10.0.2.2
+10.0.2.2 -> 10.0.2.2
+run: /mnt/bin/dns exited with code 0
+pagh:rv64> run /mnt/bin/threads
+counter=1000
+run: /mnt/bin/threads exited with code 0
+pagh:rv64> 
+```
+
+```text
+==== symlink-new (no NIC) ====
+pagh:rv64> cd /mnt
+pagh:rv64> run /mnt/bin/dd if=/mnt/dd.txt status=none
+dd-payload
+run: /mnt/bin/dd exited with code 0
+pagh:rv64> run /mnt/bin/nc
+usage: nc HOST PORT
+       nc -l [-p PORT] PORT
+run: /mnt/bin/nc exited with code 2
+pagh:rv64> run /mnt/bin/iconv -f ascii -t utf8 /mnt/hello.txt
+hello
+run: /mnt/bin/iconv exited with code 0
+pagh:rv64> run /mnt/bin/printenv
+PWD=/mnt
+run: /mnt/bin/printenv exited with code 0
+pagh:rv64> 
+```
+
+```text
+==== symlink-proc (no NIC) ====
+pagh:rv64> cd /mnt
+pagh:rv64> run /mnt/bin/free
+             total        used        free      shared  buff/cache   available
+Mem:        262144       13544      248600           0           0      248600
+Swap:            0           0           0
+run: /mnt/bin/free exited with code 0
+pagh:rv64> run /mnt/bin/ps
+  PID TTY      STAT COMMAND
+    2 ?        R    /mnt/bin/ps
+run: /mnt/bin/ps exited with code 0
+pagh:rv64> run /mnt/bin/df
+Filesystem    1K-blocks      Used Available Use% Mounted on
+procfs                0         0         0    - /proc
+ext2              65536      6116     59420  10% /mnt
+run: /mnt/bin/df exited with code 0
+pagh:rv64> 
+```
+
+`debugfs -R 'ls -l /bin' disk.img` shows the installed `paghbox` inode
+(987104 bytes) and **131 symlinks** (one per `commands=`
+entry), 132 names total. The first lines are:
+
+```text
+     17   40755 (2)      0      0    4096  1-Jan-1970 03:00 .
+      2   40755 (2)      0      0    4096 13-Nov-2026 01:44 ..
+     19  100644 (1)      0      0   987104  1-Jan-1970 03:00 paghbox
+     20  120777 (7)      0      0       7  1-Jan-1970 03:00 echo
+     21  120777 (7)      0      0       7  1-Jan-1970 03:00 true
+     22  120777 (7)      0      0       7  1-Jan-1970 03:00 false
+     23  120777 (7)      0      0       7  1-Jan-1970 03:00 yes
+     24  120777 (7)      0      0       7  1-Jan-1970 03:00 pwd
+     25  120777 (7)      0      0       7  1-Jan-1970 03:00 basename
+     26  120777 (7)      0      0       7  1-Jan-1970 03:00 dirname
+     27  120777 (7)      0      0       7  1-Jan-1970 03:00 seq
+     28  120777 (7)      0      0       7  1-Jan-1970 03:00 cat
+...
+```
+
+All 131 command names were found exactly once, and the inode size
+matches the index payload byte-for-byte.

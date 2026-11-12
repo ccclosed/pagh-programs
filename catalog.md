@@ -1,15 +1,16 @@
-# Каталог: 120 программ + 8 applet'ов сверх цели
+# Каталог: 120 программ + 11 applet'ов сверх цели
 
-Цель — 120 applet'ов плюс `threads`-демо, `dns`-резолвер, `nc`/`dd` и
-текстовые `dos2unix`/`unix2dos`/`iconv`/`printenv` (сверх цели), запускаемых
+Цель — 120 applet'ов плюс `threads`-демо, `dns`-резолвер, `nc`/`dd`, текстовые
+`dos2unix`/`unix2dos`/`iconv`/`printenv` и procfs-утилиты `ps`/`free`/`df`
+(сверх цели), запускаемых
 на pagh-riscv через `libpagh`/`paghbox`.
 Статус: `[x]` реализовано и собирается в составе `paghbox`, `[~]` в работе,
 `[ ]` запланировано. Ядро — POSIX-подобные CLI-утилиты; «портировать» =
 реализовать семантику под `libpagh` (не тащить GNU/Linux-исходники).
 
 > Статус: 120 целевых + `threads`, `dns`, `nc`, `dd`, `dos2unix`, `unix2dos`,
-> `iconv` и `printenv`, все отмечены `[x]`; собираются в `paghbox` 1.12.0
-> (128 команд).
+> `iconv`, `printenv`, `ps`, `free`, `df`, все отмечены `[x]`; собираются в
+> `paghbox` 1.13.0 (131 команда).
 > Батч 9 (6 утилит: sha3sum, calc, base85, readelf, uuidgen, paghfetch)
 > проверен живым запуском в QEMU на ядре 0.16.1: SHA3-256 сверен с
 > векторами FIPS 202, `-b`/`-c`/`--status` — по check-файлам; calc —
@@ -29,9 +30,14 @@
 > нет), проверено по `NAMES` и манифесту пакета. Список — 120 целевых имён +
 > `threads` + `dns` + `nc` + `dd` + `dos2unix` + `unix2dos` + `iconv` +
 > `printenv`, все 128 входят в `commands=` пакета. `ps`/`free`/`pgrep`/`df`
-> по-прежнему не реализуемы: в ABI 0.21.0 нет `/proc`, `/proc/meminfo` и
-> `statfs`, поэтому перечисление процессов, объём памяти и блоки ФС неоткуда
-> взять (см. примечание внизу).
+> были честно сняты в 1.11.0: в ABI 0.21.0 не было `/proc`, `/proc/meminfo` и
+> `statfs`. В волне 4 ядро получило procfs (pagh-riscv PR #9 `#10`) и
+> `statfs(43)` (PR #11), поэтому 1.13.0 реализует `ps` (скан
+> `/proc/<pid>/{stat,cmdline}`), `free` (`/proc/meminfo`) и `df`
+> (`/proc/mounts` + нативный `statfs`, сырой `ecall`, т.к. libpagh 0.6.1 этого
+> ABI ещё не описывает). `pgrep`/`pkill` пока не портированы, хотя с procfs
+> стали реализуемы. Список — 120 целевых имён + 11 сверх цели, все 131 входят
+> в `commands=` пакета.
 >
 > Ранее: батч 8 (7 утилит: sha224sum, sha384sum, crc32, base58, hex2bin,
 > bin2hex, zcat) — 42 PASS на 14 загрузках; SHA-224/SHA-384 сверены с
@@ -200,15 +206,27 @@
   неизвестный charset → 2 (сверх 120, ABI 0.21.0)
 - [x] printenv — envp как есть (`PWD=...`); `printenv NAME...` печатает значения,
   отсутствующее имя → exit 1 (сверх 120, ABI 0.21.0)
+- [x] ps — таблица `PID TTY STAT COMMAND` из `/proc/<pid>/{stat,cmdline}`; TTY
+  всегда `?` (tty в ABI нет), `--uptime` печатает `/proc/uptime`; на ядре без
+  procfs — честный отказ (сверх 120, ABI 0.22/0.23)
+- [x] free — `/proc/meminfo`: total/used/free/shared/buff-cache/available,
+  `-b/-k/-m/-g/-h`; shared/buff-cache/Swap — честные нули (счётчиков нет)
+  (сверх 120, ABI 0.22)
+- [x] df — `/proc/mounts` + нативный `statfs(43)` (96-байтный `Statfs`,
+  PR #11); `Filesystem` = тип ФС (имён устройств в ABI нет), `1K-blocks`,
+  `Used`, `Available`, `Use%`, `Mounted on`, `-h` (сверх 120, ABI 0.24)
 
 > Примечание: 120 целевых `[x]` + `threads`, `dns`, `nc`, `dd`, `dos2unix`,
-> `unix2dos`, `iconv` и `printenv` реализованы в `programs/src/applets/` и
-> собираются в `paghbox` 1.12.0 (128 команд). Живая проверка ведётся по ядру
-> 0.21.x (`run /mnt/paghbox <applet> ...`), см. README и `docs/live-testing.md`. Слот `dns` когда-то был отдан `sha512sum` (в ABI
+> `unix2dos`, `iconv`, `printenv`, `ps`, `free`, `df` реализованы в
+> `programs/src/applets/` и собираются в `paghbox` 1.13.0 (131 команда).
+> Живая проверка 1.13.0 идёт на тестовом ядре 0.24.0 из ветки `feat/statfs`
+> (PR #9/#10/#11; в main ещё не влиты), регрессия — на release-ядре 0.21.1;
+> см. README и `docs/live-testing.md`. Слот `dns` когда-то был отдан `sha512sum` (в ABI
 > 0.16.1 не было DNS); в 0.21.0 появился `libpagh::dns`, поэтому `dns` вернулся
 > отдельной командой, а не вместо `sha512sum`. Слоты
 > `pgrep`/`pkill`/`ping`/`netstat`/`lsblk`/`addr2line` заменены на
-> `sha3sum`/`calc`/`base85`/`readelf`/`uuidgen`/`paghfetch`: перечисления
-> процессов, ICMP, обзора блочных устройств и DWARF-адресов в ABI 0.21.0 нет и
-> сейчас (сигналы и TLS есть, а перечислять процессы и слать ICMP по-прежнему
-> нечем), а эти шесть утилит полностью реализуемы на нём.
+> `sha3sum`/`calc`/`base85`/`readelf`/`uuidgen`/`paghfetch`: в ABI 0.16.1 не
+> было перечисления процессов, ICMP, обзора блочных устройств и DWARF-адресов.
+> С procfs (0.22+) перечисление процессов появилось — `ps` реализован в
+> 1.13.0, `pgrep`/`pkill` стали реализуемы, но в набор пока не входят; ICMP и
+> блочных устройств в ABI по-прежнему нет.
