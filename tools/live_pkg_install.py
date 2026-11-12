@@ -121,6 +121,7 @@ def build_image(disk: pathlib.Path, rootfs: pathlib.Path) -> None:
     rootfs.mkdir(parents=True)
     (rootfs / "abc.txt").write_bytes(b"abc")
     (rootfs / "hello.txt").write_bytes(b"hello\n")
+    (rootfs / "dd.txt").write_bytes(b"dd-payload\n")
     if disk.exists():
         disk.unlink()
     subprocess.run(
@@ -229,12 +230,14 @@ def run() -> int:
 
             symlink_log = boot(
                 args.runner, args.kernel, disk,
-                "cd /mnt\nrun /mnt/bin/dns 10.0.2.2\nrun /mnt/bin/threads\n",
-                work, "symlink", net=False, settle=8.0,
+                "cd /mnt\nrun /mnt/bin/dns 10.0.2.2\nrun /mnt/bin/threads\n"
+                "run /mnt/bin/dd if=/mnt/dd.txt status=none\nrun /mnt/bin/nc\n",
+                work, "symlink", net=False, settle=10.0,
             )
             symlink = session_lines(symlink_log)
             symlink_joined = "\n".join(symlink)
-            for expected in ("10.0.2.2 -> 10.0.2.2", "counter=1000"):
+            for expected in ("10.0.2.2 -> 10.0.2.2", "counter=1000",
+                             "dd-payload", "usage: nc"):
                 if expected not in symlink_joined:
                     raise Failure(f"{expected!r} missing from the symlink session\n{symlink_joined}")
 
@@ -278,8 +281,10 @@ def run() -> int:
             "pre-installed `paghbox`.",
             "",
             "Boot 1 installs from the freshly built `repo/`; boot 2 reuses the same disk",
-            "without a NIC and runs two installer-created symlinks, including the new",
-            "`dns` applet and the 1.9.0 `threads` demo.",
+            "without a NIC and runs installer-created symlinks, including the new",
+            "`dd` and `nc` applets, the 1.10.0 `dns` resolver and the 1.9.0",
+            "`threads` demo. `dd` is a real copy (`dd-payload`); `nc` with no",
+            "arguments must print its usage and exit 2.",
             "",
             "```text",
             "==== install ====",

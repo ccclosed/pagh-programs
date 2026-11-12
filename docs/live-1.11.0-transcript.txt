@@ -1,0 +1,319 @@
+# paghbox 1.11.0 live transcript (28 boots)
+# kernel: /home/oleg/pagh-riscv/target/riscv64gc-unknown-none-elf/release/pagh
+# driver: python3 tools/live_test_1110.py
+
+===== boot 1: sha3 known vectors =====
+pagh:rv64> run /mnt/paghbox sha3sum /mnt/empty.txt
+a7ffc6f8bf1ed76651c14756a061d662f580ff4de43b49fa82d80a4b80f8434a  /mnt/empty.txt
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox sha3sum /mnt/abc.txt
+3a985da74fe225b2045c172d6bd390bd855f086e3e9d525b46bfe24511431532  /mnt/abc.txt
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox sha3sum /mnt/fox.txt
+69070dda01975c8c120c3aada1b282394e7f032fa9cf32f4cb2259a0897dfc04  /mnt/fox.txt
+run: /mnt/paghbox exited with code 0
+
+===== boot 2: sha3 options =====
+pagh:rv64> run /mnt/paghbox sha3sum -b /mnt/abc.txt
+3a985da74fe225b2045c172d6bd390bd855f086e3e9d525b46bfe24511431532 */mnt/abc.txt
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox sha3sum -c /mnt/sums.sha3
+/mnt/abc.txt: OK
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox sha3sum -c /mnt/sums.sha3.bad
+/mnt/abc.txt: FAILED
+sha3sum: WARNING: 1 computed checksum(s) did NOT match
+run: /mnt/paghbox exited with code 1
+
+===== boot 3: sha3 status and usage =====
+pagh:rv64> run /mnt/paghbox sha3sum --status -c /mnt/sums.sha3
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox sha3sum --status -c /mnt/sums.sha3.bad
+run: /mnt/paghbox exited with code 1
+pagh:rv64> run /mnt/paghbox sha3sum -z
+sha3sum: invalid option -- 'z'
+usage: sha3sum [-b] [-c] [--quiet] [--status] [FILE...]
+run: /mnt/paghbox exited with code 2
+
+===== boot 4: calc arithmetic =====
+pagh:rv64> run /mnt/paghbox calc 2+3*4
+14
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox calc (2+3)*4
+20
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox calc -5+2
+-3
+run: /mnt/paghbox exited with code 0
+
+===== boot 5: calc errors =====
+pagh:rv64> run /mnt/paghbox calc 1/0
+calc: division by zero
+run: /mnt/paghbox exited with code 1
+pagh:rv64> run /mnt/paghbox calc 2+
+calc: syntax error
+run: /mnt/paghbox exited with code 2
+pagh:rv64> run /mnt/paghbox calc 7%0
+calc: division by zero
+run: /mnt/paghbox exited with code 1
+
+===== boot 6: calc multiple and -e =====
+pagh:rv64> run /mnt/paghbox calc 1+1 2*3
+2
+6
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox calc -e 10%3
+1
+run: /mnt/paghbox exited with code 0
+
+===== boot 7: base85 encode =====
+pagh:rv64> run /mnt/paghbox base85 /mnt/hello.txt
+BOu!rD[H
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox base85 /mnt/zeros.bin
+z
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox base85 -a /mnt/abc.txt
+<~@:E^~>
+run: /mnt/paghbox exited with code 0
+
+===== boot 8: base85 decode =====
+pagh:rv64> run /mnt/paghbox base85 -d /mnt/b85hello.txt
+hello
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox base85 -d /mnt/b85adobe.txt
+hello
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox base85 -d /mnt/b85bad.txt
+base85: invalid input
+run: /mnt/paghbox exited with code 1
+
+===== boot 9: readelf header =====
+pagh:rv64> run /mnt/paghbox readelf /mnt/symbols.elf
+ELF header:
+  type:      EXEC (2)
+  machine:   RISC-V (243)
+  entry:     0x0000000000000000
+  phoff:     0
+  shoff:     64
+  flags:     0x0
+  ehsize:    64
+  phentsize: 0
+  phnum:     0
+  shentsize: 64
+  shnum:     8
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox readelf -h /mnt/notelf.txt
+readelf: /mnt/notelf.txt: not an ELF file
+run: /mnt/paghbox exited with code 1
+pagh:rv64> run /mnt/paghbox readelf
+usage: readelf [-h] [-S] [-s] [-l] FILE
+run: /mnt/paghbox exited with code 2
+
+===== boot 10: readelf sections and symbols =====
+pagh:rv64> run /mnt/paghbox readelf -S /mnt/symbols.elf
+Sections:
+  [ 0]                      NULL             0x0000000000000000 0x00000000 0x000000
+  [ 1] .text                PROGBITS         0x0000000000000000 0x00000000 0x000000
+  [ 2] .data                PROGBITS         0x0000000000000000 0x00000000 0x000000
+  [ 3] .dynsym              DYNSYM           0x0000000000000000 0x00000240 0x000030
+  [ 4] .dynstr              STRTAB           0x0000000000000000 0x00000270 0x000009
+  [ 5] .symtab              SYMTAB           0x0000000000000000 0x00000279 0x000060
+  [ 6] .strtab              STRTAB           0x0000000000000000 0x000002d9 0x000013
+  [ 7] .shstrtab            STRTAB           0x0000000000000000 0x000002ec 0x000037
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox readelf -s /mnt/symbols.elf
+Symbols:
+0000000000000040 d counter
+0000000000001234 T main
+0000000000000000 U puts
+run: /mnt/paghbox exited with code 0
+
+===== boot 11: readelf program headers and errors =====
+pagh:rv64> run /mnt/paghbox readelf -l /mnt/symbols.elf
+Program headers: none
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox readelf -S /mnt/notelf.txt
+readelf: /mnt/notelf.txt: not an ELF file
+run: /mnt/paghbox exited with code 1
+pagh:rv64> run /mnt/paghbox readelf -z /mnt/symbols.elf
+usage: readelf [-h] [-S] [-s] [-l] FILE
+run: /mnt/paghbox exited with code 2
+
+===== boot 12: uuidgen =====
+pagh:rv64> run /mnt/paghbox uuidgen
+e179efde-83b5-4832-9f91-15a107bd1df8
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox uuidgen -n 3
+6c28f3b7-1b14-4ca4-bdb6-46e0cbb672b6
+9b2f10a5-c402-4000-8d49-10e9e625e987
+0cd4d851-1888-46fc-adbb-fb62712de21d
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox uuidgen -n x
+uuidgen: invalid count: 'x'
+run: /mnt/paghbox exited with code 2
+
+===== boot 13: paghfetch =====
+pagh:rv64> run /mnt/paghbox paghfetch
+      +------+   paghfetch
+      | pagh |   sysname:   pagh
+      +------+   nodename:  pagh-riscv
+                 release:   0.10.0
+                 machine:   riscv64
+                 uptime:    0s
+                 nproc:     1
+                 pwd:       /mnt
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox paghfetch x
+usage: paghfetch
+run: /mnt/paghbox exited with code 2
+
+===== boot 14: threads demo =====
+pagh:rv64> run /mnt/paghbox threads
+counter=1000
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox threads -x
+usage: threads
+run: /mnt/paghbox exited with code 2
+
+===== boot 15: entropy applets =====
+pagh:rv64> run /mnt/paghbox uuidgen -n 4
+0f4d7e31-6049-4aa8-86db-a4eb44fd185d
+c66d396a-7fc3-4648-808a-22bd3ebb2c94
+9da57652-f9ed-4572-ac01-9d3aaba0ad09
+9abd0b19-e244-4580-9cca-bac9b320e14c
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox shuf -e a b c d e
+e
+a
+c
+d
+b
+run: /mnt/paghbox exited with code 0
+
+===== boot 16: kill signals =====
+pagh:rv64> run /mnt/paghbox kill -0 0
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox kill 99999
+kill: 99999: No such process
+run: /mnt/paghbox exited with code 1
+pagh:rv64> run /mnt/paghbox kill abc
+kill: invalid pid: 'abc'
+run: /mnt/paghbox exited with code 2
+
+===== boot 17: dns literal and usage =====
+pagh:rv64> run /mnt/paghbox dns 10.0.2.2
+10.0.2.2 -> 10.0.2.2
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox dns -z
+usage: dns [-s SERVER] HOST
+run: /mnt/paghbox exited with code 2
+pagh:rv64> run /mnt/paghbox dns
+usage: dns [-s SERVER] HOST
+run: /mnt/paghbox exited with code 2
+
+===== boot 18: plain HTTP against the host =====
+pagh:rv64> run /mnt/paghbox curl http://10.0.2.2:33159/h
+hello
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox curl -i http://10.0.2.2:33159/h
+HTTP/1.0 200 OK
+Server: SimpleHTTP/0.6 Python/3.14.7
+Date: Thu, 12 Nov 2026 20:38:28 GMT
+Content-type: application/octet-stream
+Content-Length: 6
+Last-Modified: Thu, 12 Nov 2026 20:35:59 GMT
+
+hello
+run: /mnt/paghbox exited with code 0
+
+===== boot 19: plain HTTP download =====
+pagh:rv64> run /mnt/paghbox wget -O h.out http://10.0.2.2:33159/h
+wget: saved h.out (6 bytes)
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox cat h.out
+hello
+run: /mnt/paghbox exited with code 0
+
+===== boot 20: chunked response =====
+pagh:rv64> run /mnt/paghbox curl http://10.0.2.2:33159/chunked
+hello
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox curl -i http://10.0.2.2:33159/chunked
+HTTP/1.1 200 OK
+Server: SimpleHTTP/0.6 Python/3.14.7
+Date: Thu, 12 Nov 2026 20:38:45 GMT
+Content-Type: text/plain
+Transfer-Encoding: chunked
+
+hello
+run: /mnt/paghbox exited with code 0
+
+===== boot 21: dd copy and summary =====
+pagh:rv64> run /mnt/paghbox dd if=/mnt/abc.txt of=/mnt/ddcopy.txt
+0+1 records in
+0+1 records out
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox cat /mnt/ddcopy.txt
+abc
+run: /mnt/paghbox exited with code 0
+
+===== boot 22: dd block size =====
+pagh:rv64> run /mnt/paghbox dd if=/mnt/fox.txt of=/mnt/fox.copy bs=8
+5+1 records in
+5+1 records out
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox cmp /mnt/fox.txt /mnt/fox.copy
+run: /mnt/paghbox exited with code 0
+
+===== boot 23: dd notrunc =====
+pagh:rv64> run /mnt/paghbox dd if=/mnt/abc.txt of=/mnt/fox.copy bs=4 conv=notrunc status=none
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox cmp /mnt/fox.txt /mnt/fox.copy
+/mnt/fox.txt /mnt/fox.copy differ: byte 1, line 1, offset 0x0
+run: /mnt/paghbox exited with code 1
+
+===== boot 24: dd count skip and silent =====
+pagh:rv64> run /mnt/paghbox dd if=/mnt/abc.txt bs=2 count=1 status=none
+ab
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox dd if=/mnt/abc.txt bs=1 skip=1 status=none
+bc
+run: /mnt/paghbox exited with code 0
+
+===== boot 25: dd errors =====
+pagh:rv64> run /mnt/paghbox dd bs=abc
+dd: invalid block size 'abc'
+run: /mnt/paghbox exited with code 2
+pagh:rv64> run /mnt/paghbox dd if=/mnt/nope
+dd: /mnt/nope: No such file or directory
+run: /mnt/paghbox exited with code 1
+pagh:rv64> run /mnt/paghbox dd conv=fsync
+dd: conv=fsync: not supported by this ABI
+run: /mnt/paghbox exited with code 2
+
+===== boot 26: nc usage =====
+pagh:rv64> run /mnt/paghbox nc
+usage: nc HOST PORT
+       nc -l [-p PORT] PORT
+run: /mnt/paghbox exited with code 2
+pagh:rv64> run /mnt/paghbox nc -u 10.0.2.2 80
+nc: unsupported option '-u' (TCP client/listener only)
+usage: nc HOST PORT
+       nc -l [-p PORT] PORT
+run: /mnt/paghbox exited with code 2
+pagh:rv64> run /mnt/paghbox nc -p 1234 10.0.2.2 80
+usage: nc HOST PORT
+       nc -l [-p PORT] PORT
+run: /mnt/paghbox exited with code 2
+
+===== boot 27: nc TCP client =====
+pagh:rv64> run /mnt/paghbox nc 10.0.2.2 47011
+hello from host
+run: /mnt/paghbox exited with code 0
+
+===== boot 28: nc TCP listener (hostfwd) =====
+pagh:rv64> run /mnt/paghbox nc -l -p 7001
+hello from host
+run: /mnt/paghbox exited with code 0
+
