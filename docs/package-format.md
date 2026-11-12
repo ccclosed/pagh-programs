@@ -1,8 +1,11 @@
 # .ppkg and repository index format
 
 A pagh package (`.ppkg`) is deliberately simple: a fixed header, a UTF-8 manifest,
-and one ELF payload. There is no tar/ar inside, no compression, no signatures yet
-(TLS + signatures are the next milestone; the index carries SHA-256 and size).
+and one ELF payload. There is no tar/ar inside, no compression and no package
+signatures yet (the kernel gained userland TLS sessions in 0.21.0, but the `pkg`
+installer still mirrors the repository over plain HTTP; the OpenPGP signature
+step is the next milestone, and until it lands the index carries only SHA-256 and
+size).
 
 ## File layout
 
@@ -34,7 +37,8 @@ dispatches on `argv[0]`.
 
 The format itself does not cap the number of commands. The kernel installer's
 current limit is `MAX_COMMANDS = 160` (raised from 32 in 0.10.2), which covers the
-120-applet target; a package above it would be downloaded and hash-checked, then
+120-name target plus the `threads` and `dns` extras (122 commands in paghbox
+1.10.0); a package above it would be downloaded and hash-checked, then
 refused with `pkg: install: package manifest is invalid`. That is an
 implementation limit, not a manifest error.
 

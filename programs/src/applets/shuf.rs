@@ -7,12 +7,13 @@
 //! * `-i LO-HI`: the inclusive integer range is the input.
 //!
 //! `-n N` prints only the first N lines after shuffling. Fisher-Yates is
-//! driven by a **fixed-seed xorshift64\*** generator (`0x9E3779B97F4A7C15`,
-//! shifts 12/25/27, multiplier `0x2545F4914F6CDD1D`), because the ABI has no
-//! `getrandom` and no clock in the frozen surface this applet targets. The same
-//! input therefore always produces the same order; that is a documented
-//! property, not an accident, and it makes the live test reproducible. There is
-//! no `--random-source` or `-r`.
+//! driven by a xorshift64\* generator whose seed comes from the kernel entropy
+//! pool (`libpagh::random`, ABI `getrandom`); when the pool is unavailable the
+//! seed falls back to the fixed constant `0x9E3779B97F4A7C15` so a shuffle
+//! still happens (a shuffled list is not a security claim). On a seeded machine
+//! the same input usually produces a different order each run; that is the
+//! point of `shuf`, and it is why a test may only compare the *set* of lines.
+//! There is no `--random-source` or `-r`.
 //!
 //! Exit: 0 success, 1 read/write/memory error, 2 usage.
 
@@ -20,6 +21,7 @@ use alloc::string::String;
 use alloc::vec::Vec;
 
 use libpagh::eprintln;
+use libpagh::random;
 
 use crate::util;
 
@@ -210,10 +212,19 @@ pub fn run(args: &[String]) -> i32 {
 }
 
 fn shuffle(lines: &mut [Vec<u8>]) {
-    let mut state = SEED;
+    let mut state = seed();
     for index in (1..lines.len()).rev() {
         let pick = (next_random(&mut state) % (index as u64 + 1)) as usize;
         lines.swap(index, pick);
+    }
+}
+
+/// The generator state: entropy when the kernel has it, the fixed constant
+/// otherwise (never zero, which would make xorshift64* stuck forever).
+fn seed() -> u64 {
+    match random::u64() {
+        Ok(value) if value != 0 => value,
+        _ => SEED,
     }
 }
 

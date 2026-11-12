@@ -2,7 +2,7 @@
 
 Репозиторий портов: программы написаны **под нативный API `libpagh`**
 (соседний checkout `../pagh-api`), а не под Linux-совместимый слой. Один
-busybox-style ELF `paghbox` содержит 121 applet; `tools/build_repo.py`
+busybox-style ELF `paghbox` содержит 122 applet; `tools/build_repo.py`
 упаковывает его в `.ppkg` и пишет `repo/index`. Установщик `pkg` в ядре
 pagh-riscv — потребитель этого репозитория: скачивает пакет по HTTP, сверяет
 SHA-256/размер, ставит ELF в `/mnt/bin` и создаёт симлинки на команды.
@@ -10,12 +10,12 @@ SHA-256/размер, ставит ELF в `/mnt/bin` и создаёт симл�
 ## Структура
 
 ```
-catalog.md                 целевые 120 программ + threads-демо (121 [x])
+catalog.md                 целевые 120 программ + threads/dns (122 [x])
 docs/package-format.md     формат .ppkg и index (контракт с ядром)
 programs/                  crate paghbox: dispatch + applets/
   src/main.rs              argv[0]/`paghbox <applet>` + exit codes
   src/util.rs              EAGAIN-retry, Input, which/spawn/wait, duration
-  src/applets/             121 модулей:
+  src/applets/             122 модулей:
                            echo true false yes pwd basename dirname seq
                            cat wc head tail ls stat uname hostname arch nproc sleep
                            uptime date cal readlink realpath uniq sort nl fold expand
@@ -27,14 +27,15 @@ programs/                  crate paghbox: dispatch + applets/
                            sha512sum b2sum base58 base85 base64 base32 basenc
                            diff cmp patch sed awk shuf numfmt whoami id env
                            tee split csplit join fmt od xxd uuencode uudecode
-                           curl wget kill gzip gunzip zcat tar untar
+                           curl wget dns kill gzip gunzip zcat tar untar
                            timeout watch xargs parallel install shred command
                            type time exit nice more nm readelf
                            uname-родственные: uuidgen paghfetch
                            (+ bre/codec/digest/elf/hashsum/httpc/uu helpers)
 tools/build_repo.py        cargo build -> .ppkg -> index, и --check
-tools/live_test_170.py     QEMU live suite 1.7.0 (14 загрузок, 42 проверки)
-tools/live_test_180.py     QEMU live suite 1.8.0 (13 загрузок)
+tools/live_test_1100.py    QEMU live suite 1.10.0 (27 загрузок, 65 проверок)
+tools/live_pkg_install.py  pkg install -> /mnt/bin + debugfs (транскрипт)
+tools/live_test_180.py     QEMU live suite 1.8.0 (13 загрузок; история)
 repo/                      сгенерировано, в git не входит (см. ниже)
 ```
 
@@ -54,7 +55,7 @@ python3 tools/build_repo.py --check
 ```
 
 `build_repo.py` без аргументов сам вызывает cargo, затем пишет
-`repo/pkg/paghbox-1.8.0.ppkg` и `repo/index`. `--elf PATH` упаковывает готовый
+`repo/pkg/paghbox-1.10.0.ppkg` и `repo/index`. `--elf PATH` упаковывает готовый
 ELF, `--no-build` берёт стандартный путь без cargo, `--check` только
 перечитывает index/пакеты и проверяет magic, длины, манифест, SHA-256, размер
 payload'а и отсутствие «осиротевших» `.ppkg`.
@@ -108,7 +109,7 @@ payload по SHA-256/размеру **до** записи и создаёт си
 `16 + manifest_len + payload_len`. `--check` проверяет именно такую трактовку;
 это же зафиксировано в [`docs/package-format.md`](docs/package-format.md).
 
-## Applet'ы (121)
+## Applet'ы (122)
 
 | Команда | Что делает | Коды выхода |
 |---|---|---|
@@ -193,7 +194,7 @@ payload по SHA-256/размеру **до** записи и создаёт си
 | `patch` | unified diff `---/+++/@@`, `-p N`, `-o OUT`/`.orig`; контекст без fuzz | 0; 1 (hunk/формат); 2 |
 | `sed` | `s/RE/REP/[g]`, `p`, `d`, адреса `N`/`N,M`, `-n`; BRE-lite, без `-i` | 0; 1; 2 (скрипт) |
 | `awk` | `-F`, `$0/$N`, `NR`, `NF`, `/re/`, сравнения, `{print ...}`; без массивов/BEGIN | 0; 1; 2 (программа) |
-| `shuf` | строки/stdin, `-n N`, `-e ARGS...`, `-i LO-HI`; фиксированный xorshift seed | 0; 1; 2 |
+| `shuf` | строки/stdin, `-n N`, `-e ARGS...`, `-i LO-HI`; seed из `getrandom`, fallback — фиксированный xorshift | 0; 1; 2 |
 | `numfmt` | `--to`/`--from=si\|iec\|auto`, `--to-unit`, `--suffix`, `--padding`; u128, без FP | 0; 1 (число); 2 |
 | `whoami` | `root`; uid/gid syscall в ABI пока нет | 0; 1 (write); 2 |
 | `id` | `uid=0 gid=0(root) groups=0(root)`; `-u`, `-g`, `-G` (и их комбинации) | 0; 1; 2 |
@@ -209,8 +210,9 @@ payload по SHA-256/размеру **до** записи и создаёт си
 | `bin2hex` | binary → lowercase hex, `-u`, `-w N` (0 — без переноса) | 0; 1 (io); 2 |
 | `uuencode` | classic: `begin 644 NAME`, группы 45, `end`; без `-m` | 0; 1; 2 |
 | `uudecode` | classic decode в файл из `begin` или `-o FILE` (`-` = stdout) | 0; 1 (ввод); 2 |
-| `curl` | HTTP/1.0 GET по IPv4, `-i`, `-o FILE`; `Connection: close` | 0; 1 (сеть/HTTP); 2 |
-| `wget` | тот же GET, файл по basename или `-O FILE`; summary в stderr | 0; 1; 2 |
+| `curl` | one-shot GET: `http://` по TCP или `https://` через kernel TLS 1.3; IPv4-литерал или DNS-имя; `-i`, `-o FILE`; `Connection: close` | 0; 1 (resolve/сеть/TLS/HTTP); 2 |
+| `wget` | тот же GET в файл (basename или `-O FILE`), summary в stderr | 0; 1; 2 |
+| `dns` | один `A`-запрос по UDP (`-s SERVER`, default `10.0.2.3`), `HOST -> ADDRESS`; IPv4-литерал — без сети; без DNSSEC/CNAME/AAAA | 0; 1 (resolve/сеть); 2 |
 | `kill` | TERM/KILL/INT/USR1/USR2/STOP/CONT/0 и номера, несколько pid | 0; 1 (в т.ч. ESRCH); 2 |
 | `gzip` | gzip-поток: заголовок/CRC32/ISIZE, DEFLATE **stored blocks** (без сжатия); `-d/-c/-k/-f` | 0; 1; 2 |
 | `gunzip` | `gzip -d`, отдельное имя | 0; 1; 2 |
@@ -231,7 +233,8 @@ payload по SHA-256/размеру **до** записи и создаёт си
 | `more` | `-n LINES` (24), `-d`; `--More--` после каждого чанка, без интерактива/TTY | 0; 1; 2 |
 | `nm` | ELF64 LE: `.symtab`/`.dynsym`, `-D`, `-u`, `-n`; `value T name`, без demangle | 0; 1 (ELF/файл); 2 |
 | `readelf` | ELF64 LE: `-h` (по умолчанию), `-S` секции, `-s` символы (общий парсер с `nm`), `-l` program headers | 0; 1 (ELF/файл); 2 |
-| `uuidgen` | RFC-4122 v4-shaped из xorshift64* (seed: `clock_gettime(1)` + pid), `-r`, `-n N`; не CSPRNG | 0; 1 (запись); 2 |
+| `uuidgen` | RFC-4122 v4 из пула энтропии ядра (`getrandom`), `-r`, `-n N`; без seed — fail-closed exit 1 | 0; 1 (энтропия/запись); 2 |
+| `threads` | 4 потока × 250 инкрементов под futex `Mutex`; печатает `counter=1000` (демо ABI, сверх цели) | 0; 1 (spawn/join/counter); 2 |
 
 
 `cat/wc/head/tail` и новые файловые фильтры читают через `libpagh`: `read` на
@@ -260,36 +263,41 @@ QEMU; живым запуском проверен его разбор аргу�
 
 Сборка: `cargo build --release --target riscv64gc-unknown-none-elf` даёт
 статический RV64 ELF; `python3 tools/build_repo.py` пишет
-`repo/pkg/paghbox-1.8.0.ppkg`, а `python3 tools/build_repo.py --check` зелёный.
-Пакет `paghbox 1.9.0` содержит 121 команду; его размер и SHA-256 приведены в
+`repo/pkg/paghbox-1.10.0.ppkg`, а `python3 tools/build_repo.py --check` зелёный.
+Пакет `paghbox 1.10.0` содержит 122 команды; его размер и SHA-256 приведены в
 разделе [`repo/`](#repo-и-воспроизводимость) ниже. `MAX_COMMANDS = 160` в
-установщике 0.16.1 с запасом покрывает 120.
+установщике 0.21.0 с запасом покрывает 122.
 
-Живой прогон сделан на **ядре 0.16.1** (`/home/oleg/pagh-riscv/target/.../debug/pagh`,
-native ABI + pkg installer), QEMU `virt`, 256 MiB, диск 64 MiB ext2
-(`mke2fs -q -t ext2 -F -b 4096 -d rootfs disk.img 64M`). Драйвер —
-[`tools/live_test_180.py`](tools/live_test_180.py): он собирает образ, копирует
-`paghbox` и фикстуры (SHA3-векторы, base85-строки, синтетический ELF) и делает
-**13 загрузок по 2–3 команды** (короткие группы обязательны: serial-драйвер
-теряет длинные строки вывода), проверяя вывод, коды и, для UUID, регулярное
-выражение. Результат: **36 PASS, 0 FAIL**, все 6 новых applet'ов проверены
-функционально; история батчей 8 и 7 остаётся в `docs/live-testing.md`.
+Живой прогон сделан на **ядре 0.21.0** (`/home/oleg/pagh-riscv/target/.../release/pagh`,
+main 0.21.0: нативный ABI + `pkg` + `getrandom`/TLS), QEMU `virt`, 256 MiB, диск
+64 MiB ext2 (`mke2fs -q -t ext2 -F -b 4096 -d rootfs disk.img 64M`), NIC в QEMU
+user network для сетевых кейсов. Драйвер —
+[`tools/live_test_1100.py`](tools/live_test_1100.py): он переиспользует кейсы
+1.8.0 как регрессию на 0.21.0 и добавляет проверки новой ABI (`threads`,
+`uuidgen` из `getrandom`, `dns`, `curl`/`wget` по `https://`, fail-closed-ветки).
+**27 загрузок по 1–4 короткие команды** (вход одной загрузки ≤ 150 байт — буфер
+консоли ядра не принимает длинную очередь ввода, драйвер это проверяет), после
+каждой сверяются вывод, код и `run: /mnt/paghbox exited with code N`. Итог:
+**65 PASS, 0 FAIL**.
+
+> **Release-ядро, не debug.** Debug-сборка ядра 0.21.0 переполняет 16 KiB
+> kernel-стек на userland-сессии TLS (`tls_connect` → `user_open`): guard canary
+> рапортует `[task] STACK OVERFLOW`, затем user-задача падает по instruction
+> page fault. Release-ядро рукопожатие проводит; прогон поэтому на release (как и
+> `docs/live-tls.txt` самого ядра). Это ограничение debug-сборки, не `paghbox`.
 
 Сырые транскрипты:
-[`docs/live-1.8.0-transcript.txt`](docs/live-1.8.0-transcript.txt) (13 загрузок),
-[`docs/live-1.8.0-pkg-install.txt`](docs/live-1.8.0-pkg-install.txt)
-(`pkg install` 1.8.0, 120 симлинков (историческая запись)); история 1.7.0:
-[`docs/live-1.7.0-transcript.txt`](docs/live-1.7.0-transcript.txt) (14 загрузок);
-история 1.6.0:
-[`docs/live-1.6.0-transcript.txt`](docs/live-1.6.0-transcript.txt) (23 загрузки),
-[`docs/live-1.6.0-pkg-install.txt`](docs/live-1.6.0-pkg-install.txt)
-(`pkg install` и симлинки); история батча 6:
-[`docs/live-1.5.0-transcript.txt`](docs/live-1.5.0-transcript.txt) (34 загрузки),
-[`docs/live-1.5.0-pkg-install.txt`](docs/live-1.5.0-pkg-install.txt);
-история батча 5:
-[`docs/live-1.4.0-transcript.txt`](docs/live-1.4.0-transcript.txt),
-[`docs/live-1.4.0-pkg-install.txt`](docs/live-1.4.0-pkg-install.txt).
-PASS-строки и таблица: [`docs/live-testing.md`](docs/live-testing.md).
+[`docs/live-1.10.0-transcript.txt`](docs/live-1.10.0-transcript.txt) (27 загрузок,
+65 проверок) и
+[`docs/live-1.10.0-pkg-install.txt`](docs/live-1.10.0-pkg-install.txt)
+(`pkg install` 1.10.0: 122 симлинка, `debugfs`; снимается
+[`tools/live_pkg_install.py`](tools/live_pkg_install.py)). История: 1.8.0 —
+[`docs/live-1.8.0-transcript.txt`](docs/live-1.8.0-transcript.txt) (13 загрузок,
+36 PASS) и [`docs/live-1.8.0-pkg-install.txt`](docs/live-1.8.0-pkg-install.txt);
+1.7.0 — [`docs/live-1.7.0-transcript.txt`](docs/live-1.7.0-transcript.txt);
+1.6.0/1.5.0/1.4.0 — соответствующие файлы в `docs/`; PASS-строки и таблица —
+[`docs/live-testing.md`](docs/live-testing.md). У 1.9.0 отдельного транскрипта
+не было (демо `threads` проверялось ad-hoc); впервые оно покрыто этим прогоном.
 
 | Проверка | Результат |
 |---|---|
@@ -303,7 +311,14 @@ PASS-строки и таблица: [`docs/live-testing.md`](docs/live-testing.
 | `calc` | `2+3*4` → `14`, `(2+3)*4` → `20`, `-5+2` → `-3`; два выражения — две строки, `-e 10%3` → `1`; `1/0`, `7%0` → 1; `2+` → 2 |
 | `base85` | `hello\n` → `BOu!rD[H`, `00 00 00 00` → `z`; `-a abc` → `<~@:E^~>`; decode обоих видов → `hello`; `<~v~>` → `invalid input` (1) |
 | `readelf` | синтетический ELF64 RISC-V: `-h` (EXEC/RISC-V/entry/shoff/shnum), `-S` 8 секций, `-s` те же 3 строки, что `nm`; `-l` → `Program headers: none`; не-ELF → 1, опции/операнды → 2 |
-| `uuidgen` | UUID версии 4 и варианта `[89ab]`; `-n 3` — три строки, `-n x` → 2; seed `clock_gettime(1)`+pid (не CSPRNG) |
+| `uuidgen` | UUID версии 4 и варианта `[89ab]`; `-n 4` — четыре строки, значения из `getrandom` различны (проверяет валидатор); `-n x` → 2; без seed'а — 1 |
+| `kill` | `kill -0 0` — 0 без вывода; `kill 99999` → `kill: 99999: No such process` (1, ESRCH через `libpagh` 0.6.1); `kill abc` → 2 |
+| `threads` | `counter=1000` (4 потока × 250 инкрементов под futex `Mutex`); `threads -x` → 2 |
+| `shuf` | `-e a b c d e` — те же пять строк в другом порядке: seed из `getrandom` |
+| `dns` | без сети `10.0.2.2 -> 10.0.2.2`; `example.com -> 8.…` через `10.0.2.3` и `-s SERVER`; NXDOMAIN → `dns: example.invalid: Protocol error` (1); usage → 2 |
+| `curl`/`wget` `http://` | host-сервер `10.0.2.2:PORT`: тело `hello`; `-i` → `HTTP/1.0 200 OK` + `Content-Length: 6`; `wget -O h.out` → `wget: saved h.out (6 bytes)`, `cat` → `hello`; chunked-ответ (два чанка по 3 байта) склеен в `hello` |
+| `curl`/`wget` `https://` | `example.com` через kernel TLS 1.3: `HTTP/1.1 200 OK`, `Content-Type: text/html`, тело `Example Domain` (`wget: saved w.html (577 bytes)`); `-i`, `-o`, `-O -` |
+| TLS fail-closed | NXDOMAIN — `curl: resolve: …` (1); `ftp://` — `unsupported URL` (2); локальный self-signed `openssl s_server` — `curl: tls: Certificate rejected by the trust decision` (1) |
 | `paghfetch` | реальные `sysname`/`nodename`/`release`/`machine`/`uptime`/`nproc=1`/PWD, рамка из `sysname`; лишний операнд → 2 |
 | `basenc` | base64 `aGVsbG8K`, base32 `NBSWY3DPBI======`, base32hex `D1IMOR3F18======`, base16 `68656C6C6F0A`; decode всех пяти; `-w 4` → `aGVs`/`bG8K`; base64url с `-`/`_` |
 | `gzip`/`gunzip` | `gzip -k` → `gunzip -f` → исходный текст; host stored-block `.gz` прочитан; guest `.gz` распакован Python `gzip.decompress` в `hello\n` |
@@ -319,16 +334,18 @@ PASS-строки и таблица: [`docs/live-testing.md`](docs/live-testing.
 | `time`/`nice` | `time echo` → `timed` + `real X.XXXs`, `user/sys 0.000s`, код 0; `time false` → 1; `nice -n 5` → `nice`, без приоритетов |
 | `exit`/`more`/`nm` | `exit 7` → 7, `exit` → 0, `exit 300` → 2; `more -n 3` и `-d` — точные чанки; `nm`, `-D`, `-u`, `-n` — точные строки, не-ELF → 1 |
 | `watch` | `-t -c 2 -n 0` → две ANSI-очистки + `hi`; с заголовком `Every 0s: /mnt/bin/echo hi` |
-| `pkg install` | `pkg: installed paghbox 1.8.0`; 120 симлинков (историческая запись); `/mnt/bin/sha3sum` и `/mnt/bin/calc` работают |
+| `pkg install` | `pkg: installed paghbox 1.10.0`; 122 симлинка (+ `paghbox` = 123 имени); `debugfs` сверяет inode; `/mnt/bin/dns` и `/mnt/bin/threads` работают |
 
-В 1.8.0 `pkg install paghbox` проверен на чистом 64 MiB ext2 с `repo/` на
-хосте: `pkg: installed paghbox 1.8.0`, затем
-`run /mnt/bin/sha3sum /mnt/abc.txt` → `3a98…1532  /mnt/abc.txt` и
-`run /mnt/bin/calc 2+3*4` → `14`; `debugfs` показывает `paghbox`
-(894925 байт) и 121 симлинк в `/mnt/bin`, а `ls /mnt/bin` — 121 имя.
-`build_repo.py --check` подтверждает пакет, 121 команду и согласованность
-манифеста; `MAX_COMMANDS = 160` покрывает 121. Подробности —
-[`docs/live-1.8.0-pkg-install.txt`](docs/live-1.8.0-pkg-install.txt).
+В 1.10.0 `pkg install paghbox` проверен на чистом 64 MiB ext2 с `repo/` на
+хосте: `pkg: installed paghbox 1.10.0`, затем boot без NIC
+`run /mnt/bin/dns 10.0.2.2` → `10.0.2.2 -> 10.0.2.2` и
+`run /mnt/bin/threads` → `counter=1000`; `debugfs -R 'ls -l /bin'` показывает
+`paghbox` (916536 байт payload) и 122 симлинка (123 имени). Транскрипт
+воспроизводится командой
+[`tools/live_pkg_install.py`](tools/live_pkg_install.py) — это первый
+воспроизводимый pkg-install драйвер в репозитории. `build_repo.py --check`
+подтверждает пакет, 122 команды и согласованность манифеста;
+`MAX_COMMANDS = 160` покрывает 122.
 
 ## Ограничения среды и ABI
 
@@ -340,10 +357,11 @@ PASS-строки и таблица: [`docs/live-testing.md`](docs/live-testing.
   файловых инструментов (`-` = stdin через `util::Input`), но живым запуском
   проверены файловые операнды; `tee` использует `-i FILE`, а stdin-режим `tr`
   проверен только разбором аргументов и остаётся ограничением среды.
-* **`shuf`** намеренно использует фиксированный seed
-  (`0x9E3779B97F4A7C15`, xorshift64*), потому что в целевом ABI нет
-  `getrandom`; одинаковый вход даёт одинаковый порядок. Это записано в
-  `programs/src/applets/shuf.rs`.
+* **`shuf`** сеет xorshift64* из `libpagh::random` (`getrandom`), поэтому на
+  засеянной машине порядок меняется от запуска к запуску; если пул энтропии
+  недоступен, seed падает на фиксированный `0x9E3779B97F4A7C15` и
+  перемешивание всё равно происходит. Тест поэтому сравнивает множество
+  строк, а не порядок; это записано в `programs/src/applets/shuf.rs`.
 * **Подмножества:** `sed` без `-i`, `-e`, групп/backrefs, `y/a/i/c/r/w`;
   `awk` без массивов, функций, арифметики, `BEGIN`/`END`, `printf`, `getline`
   и переменных; `diff` только normal-формат (без `-u` и рекурсии); `cmp` при
@@ -374,14 +392,22 @@ PASS-строки и таблица: [`docs/live-testing.md`](docs/live-testing.
   reflow-абзацев и не реализует sentence-spacing GNU; ширина считается в
   байтах. `od` по умолчанию печатает `x1`, а не GNU-е `o2`; `xxd -r` — базовый
   (без `*`-сжатия); `uuencode` только classic (без `-m`/base64), режим 644.
-* **`curl`/`wget`:** только `http://` и IPv4-литерал (DNS/TLS/редиректов нет),
-  HTTP/1.0 с `Connection: close`; тело читается до закрытия соединения, без
-  chunked-декодера. `curl` не следует 3xx и считает любой не-2xx ошибкой
+* **`curl`/`wget`:** `http://` и `https://` (TLS 1.3 ведёт ядро, fail-closed:
+  цепочка до закоммиченного CA-бандла, SAN, окно валидности и
+  `CertificateVerify`; отключить проверку нельзя — в ABI нет такого флага).
+  Хост — IPv4-литерал или DNS-имя (резолв `libpagh::dns`, один `A`-запрос, без
+  DNSSEC; для HTTPS имя дополнительно аутентифицируется сертификатом). Запрос —
+  HTTP/1.0 `Connection: close`; тело ограничено 8 MiB, framing —
+  close-delimited / `Content-Length` / chunked. Нет редиректов, keep-alive,
+  сжатия и настройки CA. `curl` не следует 3xx и считает любой не-2xx ошибкой
   (exit 1); `wget` пишет summary в stderr, чтобы не портить `-O -`.
-* **`kill`:** ядро 0.16.1 адресует только потоки собственного процесса
-  (`pid > 0`), `0` — вся группа; чужой pid отвечает ESRCH. В замороженной
-  таблице `libpagh` нет ESRCH, поэтому `Errno::Unknown` на этом пути
-  печатается как `No such process`. Шелл не раскрывает `$$`; безопасная проба —
+  Отсутствие seed'а энтропии, часов или сети — это отказ TLS-рукопожатия
+  (exit 1), а не обход проверки.
+* **`kill`:** ABI адресует поток (`pid > 0` — tid), группу (`0`) и весь run
+  (`-1`); перечисления процессов в ABI по-прежнему нет, поэтому `pgrep`/`pkill`
+  не портированы. С `libpagh` 0.6.1 (`pagh-api` PR #1) ESRCH отображается в
+  `Errno::ESRCH`, и чужой pid печатается как `No such process`; applet больше
+  не подменяет `Errno::Unknown`. Шелл не раскрывает `$$`; безопасная проба —
   `kill -0 0`.
 * **`gzip`/`gunzip`/`zcat`:** только DEFLATE stored blocks (BTYPE=00) — поток
   валиден, CRC-32 и ISIZE корректны, но данные не сжимаются; декодер отклоняет
@@ -391,7 +417,7 @@ PASS-строки и таблица: [`docs/live-testing.md`](docs/live-testing.
 * **`tar`/`untar`:** только ustar (без GNU longname/PAX, hardlinks, sparse и
   сжатия); имя 100 + prefix 155 байт, size < 8 GiB; mtime из boot-часов; права
   не восстанавливаются. При извлечении симлинк с абсолютной целью или `..`
-  отвергается, а `mkdirat('/mnt')` в 0.16.1 отвечает ENOTSUP, поэтому каталоги
+  отвергается, а `mkdirat('/mnt')` в текущем ABI отвечает ENOTSUP, поэтому каталоги
   создаются через stat-before-mkdir (см. `tar.rs`). Архив читается целиком.
 * **`patch`:** только unified diff на один файл; строгий контекст без fuzz и
   поиска смещения, по умолчанию `-p0`; `.orig` перезаписывается; git-бинарные
@@ -417,7 +443,7 @@ PASS-строки и таблица: [`docs/live-testing.md`](docs/live-testing.
   1970-01-01 + uptime; поддерживаются годы 1..9999.
 * **Процессы (батч 7):** `spawn_wait` делает fork/execve/wait4; поиск команды
   фиксирован (/mnt/bin → PWD → литеральный путь). `timeout` на дедлайне
-  возвращает 124, но **не может убить ребёнка**: `kill(pid)` в 0.16.1 трактует
+  возвращает 124, но **не может убить ребёнка**: `kill(pid)` в 0.21.0 трактует
   положительный pid как thread id собственного run, а чужой процесс даёт
   ESRCH (попытка kill(child_pid) наблюдаемо убивала сам timeout). Живой
   ребёнок остаётся, и его снимает `cleanup_orphans` раннера после выхода
@@ -457,33 +483,60 @@ PASS-строки и таблица: [`docs/live-testing.md`](docs/live-testing.
 * **`base85`:** без переносов строк; `-a` добавляет Adobe-делимитеры,
   decode принимает и их, и «голый» текст. Это не `btoa`-совместимый
   checksum-формат: кодируются/декодируются только данные.
-* **`uuidgen`:** **не** источник энтропии. xorshift64* засевается
-  `clock_gettime(1)` и pid, поэтому UUID детерминированы для одного seed,
-  два процесса в одном тике могут совпасть; криптостойкость и уникальность
-  не гарантированы (в ABI нет `getrandom`).
+* **`uuidgen`:** 16 байт из пула энтропии ядра (`getrandom`, ABI 278), поверх
+  выставляются версия 4 и вариант RFC 4122. Корень пула — `/chosen/rng-seed`
+  QEMU; без seed'а `getrandom` отвечает `EAGAIN`, и applet выходит 1, а не
+  подставляет часы/pid. Это идентификатор, а не ключ: формат v4, без
+  сертификации CSPRNG.
 * **`paghfetch`:** показывает только то, что есть в ABI: `uname`
   (sysname/nodename/release/machine), uptime, `nproc=1` и PWD. Названия
   дистрибутива, модели CPU, объёма RAM и числа пакетов не выдумываются;
-  `release` — поле uname (0.10.0), а не версия сборки ядра (0.16.1).
+  `release` — поле uname (0.10.0, ABI baseline), а не версия сборки ядра
+  (0.21.0; версия пакета ядра живёт в поле `version`, которое `paghfetch` не
+  печатает).
 * **`exit`** вызывает `sys::exit`, то есть завершает весь `paghbox`; это
   осмысленно только как entry point. `command`/`type` не знают builtins —
   только файлы в фиксированном поиске.
-* **Ядро 0.16.1** уже даёт fork/exec/wait, файловые мутации, mmap, pipes, poll,
-  sockets, threads и signals (52 syscall'а), но `paghbox` остаётся набором
-  CLI-фильтров: шелл ядра не создаёт конвейеров, а `pkg` ставит один bundle.
-  Соседние репозитории (`pagh-riscv`, `pagh-api`) не изменялись.
+* **Ядро 0.21.0** даёт fork/exec/wait, файловые мутации, mmap, pipes, poll,
+  TCP/UDP-сокеты, threads, signals, `getrandom` и TLS 1.3-сессии (60 syscall'ов
+  в ABI), но `paghbox` остаётся набором CLI-фильтров: шелл ядра не создаёт
+  конвейеров, а `pkg` ставит один bundle. Соседние репозитории (`pagh-riscv`,
+  `pagh-api`) не изменялись; пакет 1.10.0 собран против `libpagh` 0.6.1
+  (`pagh-api` PR #1, ветка `night/20261112-abi-errnos` @ `472874e`; после мержа
+  это main). Сборка на 0.6.0 тоже проверена — исходники собираются с обеими
+  версиями `Errno` (kill больше не ссылается на `Errno::Unknown`).
 
 ## `repo/` и воспроизводимость
 
 `target/` и `repo/` в [`.gitignore`](.gitignore): бинарники не коммитятся.
-`repo/` полностью воспроизводится командой `python3 tools/build_repo.py` из
-исходников и пинованного тулчейна; индекс детерминирован по содержимому
-(единственный недетерминизм — сам ELF от rustc). Текущий пакет — 891040
-байт payload / 894925 байт `.ppkg`, 120 команд, SHA-256
-`94832c9240b1dbeed68708576fa5f73fd9682011512e6f627cf771896e4e83ee`; в git
-он не попал (`.gitignore`), его место — на HTTP-зеркале.
+`repo/` собирается командой `python3 tools/build_repo.py` из исходников и
+пинованного тулчейна. На этом дереве с зафиксированным `pagh-api` (см. ниже)
+пакет **побайтно воспроизводится** — проверено: payload `4774e0e3…`, `.ppkg`
+`75eb6007…`, 917490 байт. Индекс детерминирован по содержимому, а ELF зависит
+ещё и от абсолютного пути checkout'ов: rustc встраивает пути
+`../pagh-api/libpagh/...` в panic-locations, поэтому сборка в другом каталоге
+даёт другой SHA. Именно поэтому CI сверяет только согласованность индекса/пакета
+(`build_repo.py --check`) и фигуры в доке (`tools/check_docs.py`), а не цифры
+payload'а. Текущий пакет — 916536 байт payload / 917490 байт `.ppkg`, 122
+команды, SHA-256
+`75eb6007b4c6b368cd941643f246051855e8657ae9ee8eade703499357987d7a`; в git он
+не попал (`.gitignore`), его место — HTTP-зеркало
+[`pagh-repo`](https://github.com/ccclosed/pagh-repo).
 
-`catalog.md` — 120 целевых имён + `threads`; `[x]` стоят у всех 121
-реализованных, `[ ]` не осталось. Список проверяется
-`tools/live_test_180.py` и `grep`-ом по `NAMES`: все 121 имя входят в
-`commands=` пакета.
+`catalog.md` — 120 целевых имён + `threads` + `dns`; `[x]` стоят у всех 122
+реализованных, `[ ]` не осталось. Список сверяется драйвером
+[`tools/live_test_1100.py`](tools/live_test_1100.py) (все 122 имени запускаются
+в QEMU) и `grep`-ом по `NAMES`: все 122 имени входят в `commands=` пакета.
+
+Зависимость `libpagh` — path-зависимость на соседний checkout `pagh-api`, и
+`Cargo.lock` не фиксирует её содержимое: при сдвиге `pagh-api` main меняется ELF
+и SHA пакета. Пакет 1.10.0 собран против `libpagh` 0.6.1 — `pagh-api` PR #1,
+ветка `night/20261112-abi-errnos` на коммите `472874e` (после мержа эквивалентный
+код лежит в main; при squash-мерже берите коммит из main, а не этот SHA);
+payload SHA-256
+`4774e0e35d331ec91352e83911db50c090d6cef74fcb9f230d74c2b70cd4c6b0`. Для
+побайтного воспроизведения нужны: этот репозиторий в `/home/oleg/pagh-programs`,
+`pagh-api` соседом в `/home/oleg/pagh-api` на указанном коммите и тот же
+тулчейн. Сборка против `libpagh` 0.6.0 (`ed37c1d`) тоже проходит — обе версии
+`Errno` компилируются, kill не использует `Errno::Unknown`, и если pagh-api #1
+ещё не влит, PR остаётся зелёным на 0.6.0.

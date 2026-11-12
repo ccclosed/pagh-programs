@@ -34,6 +34,7 @@ pub mod date;
 pub mod diff;
 mod digest;
 pub mod dirname;
+pub mod dns;
 mod elf;
 pub mod du;
 pub mod echo;
@@ -227,6 +228,7 @@ pub const NAMES: &[&str] = &[
     "uudecode",
     "curl",
     "wget",
+    "dns",
     "kill",
     "gzip",
     "gunzip",
@@ -360,6 +362,7 @@ pub fn dispatch(name: &str, args: &[String]) -> Option<i32> {
         "uudecode" => uudecode::run(args),
         "curl" => curl::run(args),
         "wget" => wget::run(args),
+        "dns" => dns::run(args),
         "kill" => kill::run(args),
         "gzip" => gzip::run(args),
         "gunzip" => gunzip::run(args),

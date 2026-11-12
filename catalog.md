@@ -1,19 +1,25 @@
-# Каталог: 120 программ + threads
+# Каталог: 120 программ + threads + dns
 
-Цель — 120 applet'ов плюс `threads`-демо, запускаемых на pagh-riscv через `libpagh`/`paghbox`.
+Цель — 120 applet'ов плюс `threads`-демо и `dns`-резолвер (сверх цели), запускаемых
+на pagh-riscv через `libpagh`/`paghbox`.
 Статус: `[x]` реализовано и собирается в составе `paghbox`, `[~]` в работе,
 `[ ]` запланировано. Ядро — POSIX-подобные CLI-утилиты; «портировать» =
 реализовать семантику под `libpagh` (не тащить GNU/Linux-исходники).
 
-> Статус: 120 целевых + `threads`, все отмечены `[x]`; собираются в `paghbox` 1.9.0.
+> Статус: 120 целевых + `threads` и `dns`, все отмечены `[x]`; собираются в
+> `paghbox` 1.10.0 (122 команды).
 > Батч 9 (6 утилит: sha3sum, calc, base85, readelf, uuidgen, paghfetch)
 > проверен живым запуском в QEMU на ядре 0.16.1: SHA3-256 сверен с
 > векторами FIPS 202, `-b`/`-c`/`--status` — по check-файлам; calc —
 > приоритеты, скобки, унарный минус и коды 1/2; base85 — round-trip в
 > обычном и Adobe-виде; readelf — заголовок/секции/символы на синтетическом
 > ELF64 RISC-V; uuidgen — v4-формат и `-n`; paghfetch — реальные uname,
-> uptime, nproc=1 и PWD. Список — 120 целевых имён + `threads`, все 121 входят
-> в `commands=` пакета.
+> uptime, nproc=1 и PWD. 1.10.0 добавил к ABI 0.21.0 `getrandom`, DNS и
+> TLS-сессии: `uuidgen` переведён на пул энтропии ядра, добавлен `dns`,
+> `curl`/`wget` ходят по `https://` через проверяемый ядром TLS 1.3, `shuf`
+> сеет порядок из `getrandom`; живой прогон 1.10.0 — 27 загрузок, 65 проверок,
+> 0 FAIL (см. README и `docs/live-testing.md`). Список — 120 целевых имён +
+> `threads` + `dns`, все 122 входят в `commands=` пакета.
 >
 > Ранее: батч 8 (7 утилит: sha224sum, sha384sum, crc32, base58, hex2bin,
 > bin2hex, zcat) — 42 PASS на 14 загрузках; SHA-224/SHA-384 сверены с
@@ -148,10 +154,10 @@
 - [x] chmod — сменить права (per-run override, не persist)
 - [x] xxd — hex dump/reverse (`-r`, `-l N`, `-s OFF`)
 - [x] more — постраничный вывод (`-n`, `-d`; без TTY)
-- [x] shuf — перемешать строки (`-n`, `-e`, `-i`; фиксированный seed)
+- [x] shuf — перемешать строки (`-n`, `-e`, `-i`; seed из `getrandom`, fallback — фиксированный)
 - [x] nm — таблица символов ELF (`-D`, `-u`, `-n`)
-- [x] curl — HTTP/1.0 GET (IPv4, `-o`, `-i`)
-- [x] wget — HTTP/1.0 GET в файл (`-O`)
+- [x] curl — one-shot GET: `http://`/`https://` (kernel TLS 1.3), IPv4/имя, `-o`, `-i`
+- [x] wget — тот же GET в файл (`-O`)
 - [x] base85 — ASCII85 encode/decode (`-d`, `-a` для `<~ ~>`), файл/stdin, round-trip; ошибка → 1
 - [x] readelf — ELF64 LE: `-h`, `-S`, `-s`, `-l`; ошибка → 1
 - [x] numfmt — SI/IEC (`--to`, `--from`, `--to-unit`, `--suffix`, `--padding`)
@@ -159,19 +165,23 @@
 - [x] gunzip — `gzip -d`, отдельное имя
 - [x] tar — ustar: create/list/extract, `-f`, `-C`, `-v`, файлы/каталоги/симлинки
 - [x] untar — `tar -x`
-- [x] uuidgen — RFC-4122 v4-shaped UUID от xorshift (clock_gettime(1)/pid), `-r`, `-n N`; уникальность не гарантирована
+- [x] uuidgen — RFC-4122 v4 из пула энтропии ядра (`getrandom`), `-r`, `-n N`; без seed — fail-closed exit 1
 - [x] cal — месяц/год по григорианскому календарю, `-y`; время — epoch
 - [x] paghfetch — баннер: uname (sysname/nodename/release/machine), uptime, nproc=1, PWD
 - [x] arch — архитектура из uname
 - [x] tree — дерево каталога
 - [x] threads — 4 потока × 250 инкрементов под futex Mutex; counter=1000 (демо ABI, сверх 120)
+- [x] dns — один `A`-запрос по UDP (`-s SERVER`, default 10.0.2.3), `HOST -> ADDRESS`;
+  без DNSSEC/CNAME/AAAA; IPv4-литерал возвращается без сети (сверх 120, ABI 0.21.0)
 
-> Примечание: 120 целевых `[x]` + `threads` реализованы в `programs/src/applets/` и
-> собираются в `paghbox` 1.9.0. Живая проверка ведётся по ядру 0.16.1
-> (`run /mnt/paghbox <applet> ...`), см. README и
-> `docs/live-testing.md`. Слот `dns` (DNS-резолв, для которого в ABI нет
-> syscall) отдан `sha512sum`, чтобы список остался ровно из 120 имён. Слоты
+> Примечание: 120 целевых `[x]` + `threads` и `dns` реализованы в
+> `programs/src/applets/` и собираются в `paghbox` 1.10.0 (122 команды). Живая
+> проверка ведётся по ядру 0.21.0 (`run /mnt/paghbox <applet> ...`), см. README
+> и `docs/live-testing.md`. Слот `dns` когда-то был отдан `sha512sum` (в ABI
+> 0.16.1 не было DNS); в 0.21.0 появился `libpagh::dns`, поэтому `dns` вернулся
+> отдельной 122-й командой, а не вместо `sha512sum`. Слоты
 > `pgrep`/`pkill`/`ping`/`netstat`/`lsblk`/`addr2line` заменены на
-> `sha3sum`/`calc`/`base85`/`readelf`/`uuidgen`/`paghfetch`: сигналы чужому
-> процессу, ICMP, перечисление блочных устройств и DWARF-адреса в ABI
-> 0.16.1 отсутствуют, а эти шесть утилит полностью реализуемы на нём.
+> `sha3sum`/`calc`/`base85`/`readelf`/`uuidgen`/`paghfetch`: перечисления
+> процессов, ICMP, обзора блочных устройств и DWARF-адресов в ABI 0.21.0 нет и
+> сейчас (сигналы и TLS есть, а перечислять процессы и слать ICMP по-прежнему
+> нечем), а эти шесть утилит полностью реализуемы на нём.

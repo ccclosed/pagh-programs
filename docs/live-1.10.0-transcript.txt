@@ -1,0 +1,361 @@
+# paghbox 1.10.0 live transcript (27 boots)
+# kernel: /home/oleg/pagh-riscv/target/riscv64gc-unknown-none-elf/release/pagh
+# driver: python3 tools/live_test_1100.py
+
+===== boot 1: sha3 known vectors =====
+pagh:rv64> run /mnt/paghbox sha3sum /mnt/empty.txt
+a7ffc6f8bf1ed76651c14756a061d662f580ff4de43b49fa82d80a4b80f8434a  /mnt/empty.txt
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox sha3sum /mnt/abc.txt
+3a985da74fe225b2045c172d6bd390bd855f086e3e9d525b46bfe24511431532  /mnt/abc.txt
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox sha3sum /mnt/fox.txt
+69070dda01975c8c120c3aada1b282394e7f032fa9cf32f4cb2259a0897dfc04  /mnt/fox.txt
+run: /mnt/paghbox exited with code 0
+
+===== boot 2: sha3 options =====
+pagh:rv64> run /mnt/paghbox sha3sum -b /mnt/abc.txt
+3a985da74fe225b2045c172d6bd390bd855f086e3e9d525b46bfe24511431532 */mnt/abc.txt
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox sha3sum -c /mnt/sums.sha3
+/mnt/abc.txt: OK
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox sha3sum -c /mnt/sums.sha3.bad
+/mnt/abc.txt: FAILED
+sha3sum: WARNING: 1 computed checksum(s) did NOT match
+run: /mnt/paghbox exited with code 1
+
+===== boot 3: sha3 status and usage =====
+pagh:rv64> run /mnt/paghbox sha3sum --status -c /mnt/sums.sha3
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox sha3sum --status -c /mnt/sums.sha3.bad
+run: /mnt/paghbox exited with code 1
+pagh:rv64> run /mnt/paghbox sha3sum -z
+sha3sum: invalid option -- 'z'
+usage: sha3sum [-b] [-c] [--quiet] [--status] [FILE...]
+run: /mnt/paghbox exited with code 2
+
+===== boot 4: calc arithmetic =====
+pagh:rv64> run /mnt/paghbox calc 2+3*4
+14
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox calc (2+3)*4
+20
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox calc -5+2
+-3
+run: /mnt/paghbox exited with code 0
+
+===== boot 5: calc errors =====
+pagh:rv64> run /mnt/paghbox calc 1/0
+calc: division by zero
+run: /mnt/paghbox exited with code 1
+pagh:rv64> run /mnt/paghbox calc 2+
+calc: syntax error
+run: /mnt/paghbox exited with code 2
+pagh:rv64> run /mnt/paghbox calc 7%0
+calc: division by zero
+run: /mnt/paghbox exited with code 1
+
+===== boot 6: calc multiple and -e =====
+pagh:rv64> run /mnt/paghbox calc 1+1 2*3
+2
+6
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox calc -e 10%3
+1
+run: /mnt/paghbox exited with code 0
+
+===== boot 7: base85 encode =====
+pagh:rv64> run /mnt/paghbox base85 /mnt/hello.txt
+BOu!rD[H
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox base85 /mnt/zeros.bin
+z
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox base85 -a /mnt/abc.txt
+<~@:E^~>
+run: /mnt/paghbox exited with code 0
+
+===== boot 8: base85 decode =====
+pagh:rv64> run /mnt/paghbox base85 -d /mnt/b85hello.txt
+hello
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox base85 -d /mnt/b85adobe.txt
+hello
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox base85 -d /mnt/b85bad.txt
+base85: invalid input
+run: /mnt/paghbox exited with code 1
+
+===== boot 9: readelf header =====
+pagh:rv64> run /mnt/paghbox readelf /mnt/symbols.elf
+ELF header:
+  type:      EXEC (2)
+  machine:   RISC-V (243)
+  entry:     0x0000000000000000
+  phoff:     0
+  shoff:     64
+  flags:     0x0
+  ehsize:    64
+  phentsize: 0
+  phnum:     0
+  shentsize: 64
+  shnum:     8
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox readelf -h /mnt/notelf.txt
+readelf: /mnt/notelf.txt: not an ELF file
+run: /mnt/paghbox exited with code 1
+pagh:rv64> run /mnt/paghbox readelf
+usage: readelf [-h] [-S] [-s] [-l] FILE
+run: /mnt/paghbox exited with code 2
+
+===== boot 10: readelf sections and symbols =====
+pagh:rv64> run /mnt/paghbox readelf -S /mnt/symbols.elf
+Sections:
+  [ 0]                      NULL             0x0000000000000000 0x00000000 0x000000
+  [ 1] .text                PROGBITS         0x0000000000000000 0x00000000 0x000000
+  [ 2] .data                PROGBITS         0x0000000000000000 0x00000000 0x000000
+  [ 3] .dynsym              DYNSYM           0x0000000000000000 0x00000240 0x000030
+  [ 4] .dynstr              STRTAB           0x0000000000000000 0x00000270 0x000009
+  [ 5] .symtab              SYMTAB           0x0000000000000000 0x00000279 0x000060
+  [ 6] .strtab              STRTAB           0x0000000000000000 0x000002d9 0x000013
+  [ 7] .shstrtab            STRTAB           0x0000000000000000 0x000002ec 0x000037
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox readelf -s /mnt/symbols.elf
+Symbols:
+0000000000000040 d counter
+0000000000001234 T main
+0000000000000000 U puts
+run: /mnt/paghbox exited with code 0
+
+===== boot 11: readelf program headers and errors =====
+pagh:rv64> run /mnt/paghbox readelf -l /mnt/symbols.elf
+Program headers: none
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox readelf -S /mnt/notelf.txt
+readelf: /mnt/notelf.txt: not an ELF file
+run: /mnt/paghbox exited with code 1
+pagh:rv64> run /mnt/paghbox readelf -z /mnt/symbols.elf
+usage: readelf [-h] [-S] [-s] [-l] FILE
+run: /mnt/paghbox exited with code 2
+
+===== boot 12: uuidgen =====
+pagh:rv64> run /mnt/paghbox uuidgen
+388ffa49-1680-434e-9020-dcccc2cc8cf1
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox uuidgen -n 3
+2f76ffb9-31e1-417a-a948-d357463a4cac
+914d3312-cfce-4b59-8c30-085d82ed3514
+1b1e4408-113c-4d22-b924-f9a2742a03c5
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox uuidgen -n x
+uuidgen: invalid count: 'x'
+run: /mnt/paghbox exited with code 2
+
+===== boot 13: paghfetch =====
+pagh:rv64> run /mnt/paghbox paghfetch
+      +------+   paghfetch
+      | pagh |   sysname:   pagh
+      +------+   nodename:  pagh-riscv
+                 release:   0.10.0
+                 machine:   riscv64
+                 uptime:    0s
+                 nproc:     1
+                 pwd:       /mnt
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox paghfetch x
+usage: paghfetch
+run: /mnt/paghbox exited with code 2
+
+===== boot 14: threads demo =====
+pagh:rv64> run /mnt/paghbox threads
+counter=1000
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox threads -x
+usage: threads
+run: /mnt/paghbox exited with code 2
+
+===== boot 15: entropy applets =====
+pagh:rv64> run /mnt/paghbox uuidgen -n 4
+e3bf61e5-7546-4865-b043-6efb2e7d79c4
+f8b9b030-3cdb-4332-9312-5ac41d5ccd9e
+bb3093a7-205e-4af0-ac09-e1398a125bbf
+87a1a3d0-14f4-4e84-8963-12ee385f7004
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox shuf -e a b c d e
+e
+d
+a
+c
+b
+run: /mnt/paghbox exited with code 0
+
+===== boot 16: kill signals =====
+pagh:rv64> run /mnt/paghbox kill -0 0
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox kill 99999
+kill: 99999: No such process
+run: /mnt/paghbox exited with code 1
+pagh:rv64> run /mnt/paghbox kill abc
+kill: invalid pid: 'abc'
+run: /mnt/paghbox exited with code 2
+
+===== boot 17: dns literal and usage =====
+pagh:rv64> run /mnt/paghbox dns 10.0.2.2
+10.0.2.2 -> 10.0.2.2
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox dns -z
+usage: dns [-s SERVER] HOST
+run: /mnt/paghbox exited with code 2
+pagh:rv64> run /mnt/paghbox dns
+usage: dns [-s SERVER] HOST
+run: /mnt/paghbox exited with code 2
+
+===== boot 18: plain HTTP against the host =====
+pagh:rv64> run /mnt/paghbox curl http://10.0.2.2:48633/h
+hello
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox curl -i http://10.0.2.2:48633/h
+HTTP/1.0 200 OK
+Server: SimpleHTTP/0.6 Python/3.14.7
+Date: Wed, 11 Nov 2026 21:57:21 GMT
+Content-type: application/octet-stream
+Content-Length: 6
+Last-Modified: Wed, 11 Nov 2026 21:54:50 GMT
+
+hello
+run: /mnt/paghbox exited with code 0
+
+===== boot 19: plain HTTP download =====
+pagh:rv64> run /mnt/paghbox wget -O h.out http://10.0.2.2:48633/h
+wget: saved h.out (6 bytes)
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox cat h.out
+hello
+run: /mnt/paghbox exited with code 0
+
+===== boot 20: chunked response =====
+pagh:rv64> run /mnt/paghbox curl http://10.0.2.2:48633/chunked
+hello
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox curl -i http://10.0.2.2:48633/chunked
+HTTP/1.1 200 OK
+Server: SimpleHTTP/0.6 Python/3.14.7
+Date: Wed, 11 Nov 2026 21:57:38 GMT
+Content-Type: text/plain
+Transfer-Encoding: chunked
+
+hello
+run: /mnt/paghbox exited with code 0
+
+===== boot 21: dns resolver =====
+pagh:rv64> run /mnt/paghbox dns example.com
+example.com -> 8.6.112.0
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox dns -s 10.0.2.3 example.com
+example.com -> 8.6.112.0
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox dns example.invalid
+dns: example.invalid: Protocol error
+run: /mnt/paghbox exited with code 1
+
+===== boot 22: HTTPS GET =====
+pagh:rv64> run /mnt/paghbox curl https://example.com/
+[stack] tls user_open future = 1320 bytes
+tls: verified leaf=sha256:85ca6ab068e9bcce88b6c4aa3c47f7d17228134a457f870d3800e6223a0df07a chain=4 certs anchors=6 host=example.com now=1794434275
+tls: CertificateVerify OK (server proved possession of the leaf key)
+tls: user session 0 open tcp=0 host=example.com (TLS 1.3, AES-128-GCM-SHA256, server authenticated, 160 ms)
+[stack] tls write future = 256 bytes
+[stack] tls read future = 424 bytes
+[stack] tls read future = 424 bytes
+tls: session 0 peer sent close_notify (clean end of stream)
+<!doctype html><html lang=en><head><meta charset=utf-8><link rel=icon href=data:,><meta name=viewport content="width=device-width,initial-scale=1"><title>Example Domain</title><style>html{color-scheme:light dark;background:light-dark(#eee,#222)}body{font:16px/1.6 system-ui,sans-serif;max-width:26em;margin:auto;padding:25vh 2em 2em;text-align:center}</style></head><body><p>This domain is for use in documentation examples without needing permission. This is not a service; avoid relying on it for testing and monitoring purposes.</p><script src=/s.js></script></body></html>
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox curl -i https://example.com/
+[stack] tls user_open future = 1320 bytes
+tls: verified leaf=sha256:85ca6ab068e9bcce88b6c4aa3c47f7d17228134a457f870d3800e6223a0df07a chain=4 certs anchors=6 host=example.com now=1794434276
+tls: CertificateVerify OK (server proved possession of the leaf key)
+tls: user session 0 open tcp=0 host=example.com (TLS 1.3, AES-128-GCM-SHA256, server authenticated, 80 ms)
+[stack] tls write future = 256 bytes
+[stack] tls read future = 424 bytes
+[stack] tls read future = 424 bytes
+tls: session 0 peer sent close_notify (clean end of stream)
+HTTP/1.1 200 OK
+Date: Wed, 11 Nov 2026 21:57:56 GMT
+Content-Type: text/html; charset=utf-8
+Connection: close
+Server: cloudflare
+last-modified: Sun, 08 Nov 2026 18:05:34 GMT
+allow: GET, HEAD
+Accept-Ranges: bytes
+Age: 7733
+cf-cache-status: HIT
+CF-RAY: a5908e346a95c4f2-HEL
+alt-svc: h3=":443"; ma=86400
+
+<!doctype html><html lang=en><head><meta charset=utf-8><link rel=icon href=data:,><meta name=viewport content="width=device-width,initial-scale=1"><title>Example Domain</title><style>html{color-scheme:light dark;background:light-dark(#eee,#222)}body{font:16px/1.6 system-ui,sans-serif;max-width:26em;margin:auto;padding:25vh 2em 2em;text-align:center}</style></head><body><p>This domain is for use in documentation examples without needing permission. This is not a service; avoid relying on it for testing and monitoring purposes.</p><script src=/s.js></script></body></html>
+run: /mnt/paghbox exited with code 0
+
+===== boot 23: HTTPS GET to a file =====
+pagh:rv64> run /mnt/paghbox curl -o out.html https://example.com/
+[stack] tls user_open future = 1320 bytes
+tls: verified leaf=sha256:85ca6ab068e9bcce88b6c4aa3c47f7d17228134a457f870d3800e6223a0df07a chain=4 certs anchors=6 host=example.com now=1794434283
+tls: CertificateVerify OK (server proved possession of the leaf key)
+tls: user session 0 open tcp=0 host=example.com (TLS 1.3, AES-128-GCM-SHA256, server authenticated, 130 ms)
+[stack] tls write future = 256 bytes
+[stack] tls read future = 424 bytes
+[stack] tls read future = 424 bytes
+tls: session 0 peer sent close_notify (clean end of stream)
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox cat out.html
+<!doctype html><html lang=en><head><meta charset=utf-8><link rel=icon href=data:,><meta name=viewport content="width=device-width,initial-scale=1"><title>Example Domain</title><style>html{color-scheme:light dark;background:light-dark(#eee,#222)}body{font:16px/1.6 system-ui,sans-serif;max-width:26em;margin:auto;padding:25vh 2em 2em;text-align:center}</style></head><body><p>This domain is for use in documentation examples without needing permission. This is not a service; avoid relying on it for testing and monitoring purposes.</p><script src=/s.js></script></body></html>
+run: /mnt/paghbox exited with code 0
+
+===== boot 24: HTTPS wget =====
+pagh:rv64> run /mnt/paghbox wget -O w.html https://example.com/
+[stack] tls user_open future = 1320 bytes
+tls: verified leaf=sha256:85ca6ab068e9bcce88b6c4aa3c47f7d17228134a457f870d3800e6223a0df07a chain=4 certs anchors=6 host=example.com now=1794434292
+tls: CertificateVerify OK (server proved possession of the leaf key)
+tls: user session 0 open tcp=0 host=example.com (TLS 1.3, AES-128-GCM-SHA256, server authenticated, 120 ms)
+[stack] tls write future = 256 bytes
+[stack] tls read future = 424 bytes
+[stack] tls read future = 424 bytes
+tls: session 0 peer sent close_notify (clean end of stream)
+wget: saved w.html (577 bytes)
+run: /mnt/paghbox exited with code 0
+pagh:rv64> run /mnt/paghbox cat w.html
+<!doctype html><html lang=en><head><meta charset=utf-8><link rel=icon href=data:,><meta name=viewport content="width=device-width,initial-scale=1"><title>Example Domain</title><style>html{color-scheme:light dark;background:light-dark(#eee,#222)}body{font:16px/1.6 system-ui,sans-serif;max-width:26em;margin:auto;padding:25vh 2em 2em;text-align:center}</style></head><body><p>This domain is for use in documentation examples without needing permission. This is not a service; avoid relying on it for testing and monitoring purposes.</p><script src=/s.js></script></body></html>
+run: /mnt/paghbox exited with code 0
+
+===== boot 25: HTTPS wget to stdout =====
+pagh:rv64> run /mnt/paghbox wget -O - https://example.com/
+[stack] tls user_open future = 1320 bytes
+tls: verified leaf=sha256:85ca6ab068e9bcce88b6c4aa3c47f7d17228134a457f870d3800e6223a0df07a chain=4 certs anchors=6 host=example.com now=1794434300
+tls: CertificateVerify OK (server proved possession of the leaf key)
+tls: user session 0 open tcp=0 host=example.com (TLS 1.3, AES-128-GCM-SHA256, server authenticated, 100 ms)
+[stack] tls write future = 256 bytes
+[stack] tls read future = 424 bytes
+[stack] tls read future = 424 bytes
+tls: session 0 peer sent close_notify (clean end of stream)
+<!doctype html><html lang=en><head><meta charset=utf-8><link rel=icon href=data:,><meta name=viewport content="width=device-width,initial-scale=1"><title>Example Domain</title><style>html{color-scheme:light dark;background:light-dark(#eee,#222)}body{font:16px/1.6 system-ui,sans-serif;max-width:26em;margin:auto;padding:25vh 2em 2em;text-align:center}</style></head><body><p>This domain is for use in documentation examples without needing permission. This is not a service; avoid relying on it for testing and monitoring purposes.</p><script src=/s.js></script></body></html>
+wget: saved - (577 bytes)
+run: /mnt/paghbox exited with code 0
+
+===== boot 26: HTTPS fail-closed =====
+pagh:rv64> run /mnt/paghbox curl https://example.invalid/
+curl: resolve: Protocol error
+run: /mnt/paghbox exited with code 1
+pagh:rv64> run /mnt/paghbox curl ftp://example.com/
+curl: unsupported URL: 'ftp://example.com/'
+run: /mnt/paghbox exited with code 2
+
+===== boot 27: TLS chain gate =====
+pagh:rv64> run /mnt/paghbox curl https://10.0.2.2:48639/
+[stack] tls user_open future = 1320 bytes
+tls: verify FAILED cause=chain (NoAnchor) - the server chain does not validate against the committed CA bundle
+tls: user session host=10.0.2.2 FAILED stage=handshake (InvalidCertificate)
+tls: user session host=10.0.2.2 refused (Certificate)
+curl: tls: Certificate rejected by the trust decision
+run: /mnt/paghbox exited with code 1
+

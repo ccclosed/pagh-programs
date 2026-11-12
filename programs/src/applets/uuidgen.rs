@@ -1,40 +1,35 @@
-//! `uuidgen` — print RFC 4122 *version-4-shaped* UUIDs.
+//! `uuidgen` — print RFC 4122 version-4 UUIDs from the kernel entropy pool.
 //!
 //! ```text
 //! uuidgen [-r] [-n N]
 //! ```
 //!
-//! The default (and only) mode is `-r`: 16 random bytes rendered as
-//! `xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx`, with the version nibble forced to 4
-//! and the variant bits to `10`. `-n N` prints N UUIDs, one per line; `-n 0`
-//! prints nothing and exits 0.
+//! Each UUID is 16 bytes from [`libpagh::random`] (`getrandom`, ABI 278) with
+//! the version nibble forced to 4 and the variant bits to `10`. The kernel's
+//! SHA-256 pool is the same source the kernel TLS client uses for session keys;
+//! the applet neither seeds nor mixes in a clock or a pid, so the output is not
+//! predictable from boot time.
 //!
-//! ## There is no entropy source
+//! Fail-closed: when the pool has no seed (kernel refuses `getrandom` with
+//! `EAGAIN`) this applet exits 1 with the ABI error instead of falling back to a
+//! counter or the clock. A UUID is an identifier, not a key, but silently
+//! substituting a weak source is exactly how a "random" identifier becomes a
+//! fingerprint, and `libpagh` documents the pool as the one source.
 //!
-//! The ABI has no `getrandom`, no `/dev/urandom` and no hardware RNG. This
-//! applet seeds a xorshift64* generator (the same constants as `shuf`) from
-//! `clock_gettime(CLOCK_MONOTONIC)` seconds and nanoseconds and from `getpid`,
-//! then derives every UUID from that stream. The seed is deterministic for a
-//! given clock reading and pid, so:
+//! `-n N` prints N UUIDs, one per line; `-n 0` prints nothing and exits 0.
+//! `-r` is accepted for command-line compatibility and is the only mode (there
+//! is no name-based variant here).
 //!
-//! * the output is **not cryptographically random**;
-//! * two processes seeded in the same clock tick can produce the same UUID;
-//! * uniqueness and unpredictability are **not guaranteed**.
-//!
-//! It is a shape-compatible identifier generator for a single-user hobby OS,
-//! not a replacement for a kernel CSPRNG. `-r` is accepted (and is the only
-//! mode) for command-line compatibility.
-//!
-//! Exit: 0 success; 2 usage or an invalid `-n`; 1 on a write error.
+//! Exit: 0 success; 1 entropy/write error; 2 usage or an invalid `-n`.
 
 use alloc::string::String;
 
-use libpagh::{eprintln, sys, Timespec};
+use libpagh::eprintln;
+use libpagh::random;
 
 use crate::util;
 
 const USAGE: &str = "usage: uuidgen [-r] [-n N]";
-const SEED: u64 = 0x9E37_79B9_7F4A_7C15;
 
 pub fn run(args: &[String]) -> i32 {
     let mut count = 1usize;
@@ -80,13 +75,12 @@ pub fn run(args: &[String]) -> i32 {
         return util::EXIT_USAGE;
     }
 
-    let mut state = seed();
     for _ in 0..count {
         let mut bytes = [0u8; 16];
-        let high = next_random(&mut state).to_be_bytes();
-        let low = next_random(&mut state).to_be_bytes();
-        bytes[..8].copy_from_slice(&high);
-        bytes[8..].copy_from_slice(&low);
+        if let Err(err) = random::fill(&mut bytes) {
+            eprintln!("uuidgen: entropy pool unavailable: {err}");
+            return util::EXIT_FAILURE;
+        }
         bytes[6] = (bytes[6] & 0x0f) | 0x40; // version 4
         bytes[8] = (bytes[8] & 0x3f) | 0x80; // RFC 4122 variant
 
@@ -97,36 +91,6 @@ pub fn run(args: &[String]) -> i32 {
         }
     }
     util::EXIT_OK
-}
-
-/// Build the generator state from the monotonic clock and the pid.
-///
-/// A missing clock or pid is tolerated (the remaining source still seeds the
-/// stream); a zero state is replaced because xorshift64* would stay zero.
-fn seed() -> u64 {
-    let mut state = SEED;
-    let mut now = Timespec::default();
-    if sys::clock_gettime(sys::CLOCK_MONOTONIC, &mut now).is_ok() {
-        state ^= (now.seconds as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15);
-        state ^= (now.nanos as u64).wrapping_mul(0xBF58_476D_1CE4_E5B9);
-    }
-    if let Ok(pid) = sys::getpid() {
-        state ^= (pid as u64).wrapping_mul(0xD1B5_4A32_D192_ED03);
-    }
-    if state == 0 {
-        state = SEED;
-    }
-    state
-}
-
-/// xorshift64*: shifts 12/25/27 and the `0x2545F4914F6CDD1D` multiplier.
-fn next_random(state: &mut u64) -> u64 {
-    let mut value = *state;
-    value ^= value >> 12;
-    value ^= value << 25;
-    value ^= value >> 27;
-    *state = value;
-    value.wrapping_mul(0x2545_F491_4F6C_DD1D)
 }
 
 fn format_uuid(bytes: &[u8; 16]) -> String {
