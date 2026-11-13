@@ -7,6 +7,13 @@ busybox-style ELF `paghbox` содержит 131 applet; `tools/build_repo.py`
 pagh-riscv — потребитель этого репозитория: скачивает пакет по HTTP, сверяет
 SHA-256/размер, ставит ELF в `/mnt/bin` и создаёт симлинки на команды.
 
+## Branching and releases
+
+`main` is the stable branch; `dev` is the experimental integration branch. Feature
+and fix PRs target `dev`; stable releases are tagged from `main`, release
+candidates/pre-releases from `dev` (`vX.Y.Z-rc.N`). The release workflow refuses a
+tag cut from the wrong branch. See [BRANCHING.md](BRANCHING.md).
+
 ## Структура
 
 ```
