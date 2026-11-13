@@ -1,5 +1,148 @@
 # Живые прогоны paghbox
 
+## 1.11.0 (ABI 0.21.x: nc и dd)
+
+Дата: ночь 2026-11-12/13. Ядро:
+`/home/oleg/pagh-riscv/target/riscv64gc-unknown-none-elf/release/pagh`
+(release-сборка 0.21.1: ABI 0.21.x + `getrandom`/TLS; `uname` version 0.21.1).
+QEMU `qemu-system-riscv64` 10.2.2, машина `virt`, 256 MiB, serial на Unix-сокете,
+`-bios default`, modern virtio (`-global virtio-mmio.force-legacy=false`), NIC в
+QEMU user network для сетевых кейсов (DHCP `10.0.2.15`, хост `10.0.2.2`). Диск:
+64 MiB ext2, создан на хосте
+`mke2fs -q -t ext2 -F -b 4096 -d rootfs disk.img 64M`; в корне — `paghbox`
+1.11.0, фикстуры 1.8.0 и короткий `h` (`hello\n`) для host-сервера.
+
+Драйвер — [`tools/live_test_1110.py`](../tools/live_test_1110.py): **28 загрузок
+по 1–3 команды** (вход одной загрузки ≤ 150 байт — тот же предел буфера консоли,
+что у 1.8.0/1.10.0, драйвер это проверяет), после каждой сверяются вывод,
+`run: /mnt/paghbox exited with code N` и, где данные не фиксированы, регулярные
+выражения. Первые 13 загрузок — регрессия 1.8.0, затем сетевые кейсы 1.10.0
+(`threads`, `uuidgen`/`shuf` на `getrandom`, `kill`, `dns`-литерал, `curl`/`wget`
+по `http://` против host-сервера), затем новые `dd` и `nc`. Итог:
+**68 PASS, 0 FAIL**. 1.11.0 не менял ABI; пакет собран против `libpagh` 0.6.1
+(`pagh-api` main `b203ea6`).
+
+Сырой транскрипт: [`live-1.11.0-transcript.txt`](live-1.11.0-transcript.txt).
+Отдельно: [`live-1.11.0-pkg-install.txt`](live-1.11.0-pkg-install.txt) —
+`pkg install paghbox 1.11.0` на чистом 64 MiB ext2: 124 симлинка + `paghbox`
+(125 имён), `debugfs` сверяет inode; boot без NIC запускает `/mnt/bin/dd`
+(`dd-payload`) и `/mnt/bin/nc` (`usage: nc`, exit 2). Снимается
+[`tools/live_pkg_install.py`](../tools/live_pkg_install.py) (host HTTP-сервер,
+две загрузки).
+
+### Итог 1.11.0
+
+* `dd` — `if=abc.txt of=ddcopy.txt` → `0+1 records in` / `0+1 records out`
+  (bs по умолчанию 512, файл 3 байта — один частичный блок), `cat` → `abc`;
+  `bs=8` на `fox.txt` (43 байта) → `5+1 records in/out` и `cmp` → 0;
+  `conv=notrunc` поверх `fox.copy` пишет 3 байта без усечения, второй `cmp` →
+  `differ: byte 1` (хвост файла сохранён); `bs=2 count=1 status=none` → `ab`,
+  `bs=1 skip=1 status=none` → `bc`; неверный `bs=abc` → exit 2, отсутствующий
+  `if=` → exit 1, `conv=fsync` → exit 2 (в ABI нет `fsync`, поэтому conversion
+  отклоняется с причиной, а не игнорируется).
+* `nc` — без аргументов → usage (2); `-u` → 2 с явным «TCP client/listener
+  only» (UDP `connect`/EOF в ABI нет); TCP-клиент `nc 10.0.2.2:PORT` против
+  host-сервера получает `hello from host` и выходит 0 после FIN; listener
+  `nc -l -p 7001` принимает соединение через QEMU `hostfwd`
+  (`hostfwd=tcp:127.0.0.1:HPORT-:7001`), получает тот же payload и выходит 0.
+* Регрессия: кейсы 1.8.0 (sha3/calc/base85/readelf/uuidgen/paghfetch) и сетевые
+  1.10.0-кейсы проходят на 0.21.1 без изменений.
+* `ps`/`free`/`pgrep`/`df` не добавлены и не выдаются за реализованные: в ABI
+  0.21.x нет `/proc`, `/proc/meminfo` и `statfs` (см. README, «Ограничения
+  среды и ABI»).
+
+### Чем проверка ограничена (1.11.0)
+
+* `nc` — только TCP: `-u`, `-e`, `-z`, `-i`, `-w`, `-s` отклоняются как
+  неподдерживаемые. Один коннект и один listener; `shutdown` в ABI закрывает оба
+  направления, поэтому EOF на stdin не делает half-close — сокет остаётся
+  открытым на чтение до FIN от peer'а.
+* `nc`-клиент в живом кейсе идёт на IPv4-литерал; резолв имени через
+  `libpagh::dns` проверен в 1.10.0 на `curl`/`wget` (тот же резолвер), у `nc`
+  отдельного DNS-кейса нет.
+* host-сервер в кейсе `nc` отправляет payload через 0.75 с после accept: peer,
+  который принимает и закрывается в тот же миг, превращает `connect()` в
+  `ETIMEDOUT` — это воспроизводится и на `curl`, то есть ограничение
+  kernel TCP-клиента под QEMU user-net, а не applet'а.
+* `dd` без `if=` читает stdin, у которого нет EOF; живой кейс всегда с `if=`.
+  `seek` живым кейсом не покрыт (только код-путь): на ext2 запись в offset
+  проверена ранее `truncate`/`cp`, отдельного кейса у `dd seek` нет.
+* TLS-кейсы 1.10.0 здесь не повторяются: 1.11.0 не меняет ABI/TLS, а полный
+  TLS-прогон требует host-интернета (он в `live_test_1100.py --tls`).
+
+### PASS-строки 1.11.0
+
+```text
+PASS sha3 empty: run /mnt/paghbox sha3sum /mnt/empty.txt
+PASS sha3 abc: run /mnt/paghbox sha3sum /mnt/abc.txt
+PASS sha3 fox: run /mnt/paghbox sha3sum /mnt/fox.txt
+PASS sha3 -b: run /mnt/paghbox sha3sum -b /mnt/abc.txt
+PASS sha3 check: run /mnt/paghbox sha3sum -c /mnt/sums.sha3
+PASS sha3 bad check: run /mnt/paghbox sha3sum -c /mnt/sums.sha3.bad
+PASS sha3 status ok: run /mnt/paghbox sha3sum --status -c /mnt/sums.sha3
+PASS sha3 status bad: run /mnt/paghbox sha3sum --status -c /mnt/sums.sha3.bad
+PASS sha3 bad option: run /mnt/paghbox sha3sum -z
+PASS calc precedence: run /mnt/paghbox calc 2+3*4
+PASS calc parentheses: run /mnt/paghbox calc (2+3)*4
+PASS calc unary minus: run /mnt/paghbox calc -5+2
+PASS calc divide by zero: run /mnt/paghbox calc 1/0
+PASS calc syntax: run /mnt/paghbox calc 2+
+PASS calc modulo zero: run /mnt/paghbox calc 7%0
+PASS calc two expressions: run /mnt/paghbox calc 1+1 2*3
+PASS calc eval: run /mnt/paghbox calc -e 10%3
+PASS base85 hello: run /mnt/paghbox base85 /mnt/hello.txt
+PASS base85 zero group: run /mnt/paghbox base85 /mnt/zeros.bin
+PASS base85 adobe: run /mnt/paghbox base85 -a /mnt/abc.txt
+PASS base85 decode hello: run /mnt/paghbox base85 -d /mnt/b85hello.txt
+PASS base85 decode adobe: run /mnt/paghbox base85 -d /mnt/b85adobe.txt
+PASS base85 invalid: run /mnt/paghbox base85 -d /mnt/b85bad.txt
+PASS readelf header: run /mnt/paghbox readelf /mnt/symbols.elf
+PASS readelf not elf: run /mnt/paghbox readelf -h /mnt/notelf.txt
+PASS readelf no operand: run /mnt/paghbox readelf
+PASS readelf sections: run /mnt/paghbox readelf -S /mnt/symbols.elf
+PASS readelf symbols: run /mnt/paghbox readelf -s /mnt/symbols.elf
+PASS readelf program headers: run /mnt/paghbox readelf -l /mnt/symbols.elf
+PASS readelf bad section file: run /mnt/paghbox readelf -S /mnt/notelf.txt
+PASS readelf bad option: run /mnt/paghbox readelf -z /mnt/symbols.elf
+PASS uuidgen default: run /mnt/paghbox uuidgen
+PASS uuidgen count: run /mnt/paghbox uuidgen -n 3
+PASS uuidgen bad count: run /mnt/paghbox uuidgen -n x
+PASS paghfetch: run /mnt/paghbox paghfetch
+PASS paghfetch usage: run /mnt/paghbox paghfetch x
+PASS threads counter: run /mnt/paghbox threads
+PASS threads usage: run /mnt/paghbox threads -x
+PASS uuidgen entropy: run /mnt/paghbox uuidgen -n 4
+PASS shuf entropy: run /mnt/paghbox shuf -e a b c d e
+PASS kill -0 group: run /mnt/paghbox kill -0 0
+PASS kill no such pid: run /mnt/paghbox kill 99999
+PASS kill bad pid: run /mnt/paghbox kill abc
+PASS dns literal: run /mnt/paghbox dns 10.0.2.2
+PASS dns usage: run /mnt/paghbox dns -z
+PASS dns missing host: run /mnt/paghbox dns
+PASS curl http: run /mnt/paghbox curl http://10.0.2.2:46557/h
+PASS curl http -i: run /mnt/paghbox curl -i http://10.0.2.2:46557/h
+PASS wget http: run /mnt/paghbox wget -O h.out http://10.0.2.2:46557/h
+PASS cat wget output: run /mnt/paghbox cat h.out
+PASS curl chunked: run /mnt/paghbox curl http://10.0.2.2:46557/chunked
+PASS curl chunked -i: run /mnt/paghbox curl -i http://10.0.2.2:46557/chunked
+PASS dd copy: run /mnt/paghbox dd if=/mnt/abc.txt of=/mnt/ddcopy.txt
+PASS dd copy content: run /mnt/paghbox cat /mnt/ddcopy.txt
+PASS dd bs round trip: run /mnt/paghbox dd if=/mnt/fox.txt of=/mnt/fox.copy bs=8
+PASS dd bs content: run /mnt/paghbox cmp /mnt/fox.txt /mnt/fox.copy
+PASS dd notrunc existing: run /mnt/paghbox dd if=/mnt/abc.txt of=/mnt/fox.copy bs=4 conv=notrunc status=none
+PASS dd notrunc leaves tail: run /mnt/paghbox cmp /mnt/fox.txt /mnt/fox.copy
+PASS dd count block: run /mnt/paghbox dd if=/mnt/abc.txt bs=2 count=1 status=none
+PASS dd skip byte: run /mnt/paghbox dd if=/mnt/abc.txt bs=1 skip=1 status=none
+PASS dd bad size: run /mnt/paghbox dd bs=abc
+PASS dd missing input: run /mnt/paghbox dd if=/mnt/nope
+PASS dd unsupported conv: run /mnt/paghbox dd conv=fsync
+PASS nc no args: run /mnt/paghbox nc
+PASS nc unsupported -u: run /mnt/paghbox nc -u 10.0.2.2 80
+PASS nc client -p: run /mnt/paghbox nc -p 1234 10.0.2.2 80
+PASS nc client: run /mnt/paghbox nc 10.0.2.2 34777
+PASS nc listener: run /mnt/paghbox nc -l -p 7001
+```
+
 ## 1.10.0 (ABI 0.21.0: getrandom, DNS и TLS)
 
 Дата: 2026-11-12. Ядро: `/home/oleg/pagh-riscv/target/riscv64gc-unknown-none-elf/release/pagh`

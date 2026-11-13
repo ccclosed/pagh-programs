@@ -1,13 +1,13 @@
-# Каталог: 120 программ + threads + dns
+# Каталог: 120 программ + threads/dns/nc/dd
 
-Цель — 120 applet'ов плюс `threads`-демо и `dns`-резолвер (сверх цели), запускаемых
+Цель — 120 applet'ов плюс `threads`-демо, `dns`-резолвер и `nc`/`dd` (сверх цели), запускаемых
 на pagh-riscv через `libpagh`/`paghbox`.
 Статус: `[x]` реализовано и собирается в составе `paghbox`, `[~]` в работе,
 `[ ]` запланировано. Ядро — POSIX-подобные CLI-утилиты; «портировать» =
 реализовать семантику под `libpagh` (не тащить GNU/Linux-исходники).
 
-> Статус: 120 целевых + `threads` и `dns`, все отмечены `[x]`; собираются в
-> `paghbox` 1.10.0 (122 команды).
+> Статус: 120 целевых + `threads`, `dns`, `nc` и `dd`, все отмечены `[x]`;
+> собираются в `paghbox` 1.11.0 (124 команды).
 > Батч 9 (6 утилит: sha3sum, calc, base85, readelf, uuidgen, paghfetch)
 > проверен живым запуском в QEMU на ядре 0.16.1: SHA3-256 сверен с
 > векторами FIPS 202, `-b`/`-c`/`--status` — по check-файлам; calc —
@@ -18,8 +18,14 @@
 > TLS-сессии: `uuidgen` переведён на пул энтропии ядра, добавлен `dns`,
 > `curl`/`wget` ходят по `https://` через проверяемый ядром TLS 1.3, `shuf`
 > сеет порядок из `getrandom`; живой прогон 1.10.0 — 27 загрузок, 65 проверок,
-> 0 FAIL (см. README и `docs/live-testing.md`). Список — 120 целевых имён +
-> `threads` + `dns`, все 122 входят в `commands=` пакета.
+> 0 FAIL (см. README и `docs/live-testing.md`). 1.11.0 добавил `dd` (блочное
+> копирование `if=/of=/bs=/count=/skip=/seek=/conv=notrunc`) и `nc` (TCP
+> клиент и одноразовый listener, relay через `poll`) — оба полностью
+> реализуемы на ABI 0.21.0. Список — 120 целевых имён + `threads` + `dns` +
+> `nc` + `dd`, все 124 входят в `commands=` пакета. `ps`/`free`/`pgrep`/`df`
+> по-прежнему не реализуемы: в ABI 0.21.0 нет `/proc`, `/proc/meminfo` и
+> `statfs`, поэтому перечисление процессов, объём памяти и блоки ФС неоткуда
+> взять (см. примечание внизу).
 >
 > Ранее: батч 8 (7 утилит: sha224sum, sha384sum, crc32, base58, hex2bin,
 > bin2hex, zcat) — 42 PASS на 14 загрузках; SHA-224/SHA-384 сверены с
@@ -173,13 +179,19 @@
 - [x] threads — 4 потока × 250 инкрементов под futex Mutex; counter=1000 (демо ABI, сверх 120)
 - [x] dns — один `A`-запрос по UDP (`-s SERVER`, default 10.0.2.3), `HOST -> ADDRESS`;
   без DNSSEC/CNAME/AAAA; IPv4-литерал возвращается без сети (сверх 120, ABI 0.21.0)
+- [x] nc — TCP-клиент `nc HOST PORT` (IPv4/имя через `dns::resolve`) и одноразовый
+  listener `nc -l [-p PORT] PORT`; relay stdin↔socket через `poll`; без UDP/`-e`/`-z`
+  (сверх 120, ABI 0.21.0)
+- [x] dd — блочное копирование `if=/of=/bs=/count=/skip=/seek=/conv=notrunc/status=`;
+  `bs` с суффиксами `c/w/b/k/K/M/G`, вывод — `N+M records in/out`; ошибки ABI
+  (`conv=fsync` нет) отклоняются, а не игнорируются (сверх 120, ABI 0.21.0)
 
 > Примечание: 120 целевых `[x]` + `threads` и `dns` реализованы в
-> `programs/src/applets/` и собираются в `paghbox` 1.10.0 (122 команды). Живая
-> проверка ведётся по ядру 0.21.0 (`run /mnt/paghbox <applet> ...`), см. README
+> `programs/src/applets/` и собираются в `paghbox` 1.11.0 (124 команды). Живая
+> проверка ведётся по ядру 0.21.x (`run /mnt/paghbox <applet> ...`), см. README
 > и `docs/live-testing.md`. Слот `dns` когда-то был отдан `sha512sum` (в ABI
 > 0.16.1 не было DNS); в 0.21.0 появился `libpagh::dns`, поэтому `dns` вернулся
-> отдельной 122-й командой, а не вместо `sha512sum`. Слоты
+> отдельной командой, а не вместо `sha512sum`. Слоты
 > `pgrep`/`pkill`/`ping`/`netstat`/`lsblk`/`addr2line` заменены на
 > `sha3sum`/`calc`/`base85`/`readelf`/`uuidgen`/`paghfetch`: перечисления
 > процессов, ICMP, обзора блочных устройств и DWARF-адресов в ABI 0.21.0 нет и

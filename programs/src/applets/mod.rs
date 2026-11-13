@@ -31,6 +31,7 @@ pub mod cp;
 pub mod crc32;
 pub mod cut;
 pub mod date;
+pub mod dd;
 pub mod diff;
 mod digest;
 pub mod dirname;
@@ -65,6 +66,7 @@ pub mod join;
 pub mod kill;
 pub mod mktemp;
 pub mod mv;
+pub mod nc;
 pub mod nl;
 pub mod nproc;
 pub mod numfmt;
@@ -261,6 +263,8 @@ pub const NAMES: &[&str] = &[
     "uuidgen",
     "paghfetch",
     "threads",
+    "nc",
+    "dd",
 ];
 
 /// Run an applet by name; `None` means "no such applet".
@@ -389,6 +393,8 @@ pub fn dispatch(name: &str, args: &[String]) -> Option<i32> {
         "uuidgen" => uuidgen::run(args),
         "paghfetch" => paghfetch::run(args),
         "threads" => threads::run(args),
+        "nc" => nc::run(args),
+        "dd" => dd::run(args),
         _ => return None,
     })
 }
