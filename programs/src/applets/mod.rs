@@ -32,6 +32,7 @@ pub mod crc32;
 pub mod cut;
 pub mod date;
 pub mod dd;
+pub mod df;
 pub mod diff;
 mod digest;
 pub mod dirname;
@@ -47,6 +48,7 @@ pub mod factor;
 pub mod false_applet;
 pub mod file;
 pub mod find;
+pub mod free;
 pub mod fmt;
 pub mod fold;
 pub mod gzip;
@@ -56,6 +58,7 @@ pub mod head;
 pub mod hex2bin;
 pub mod hexdump;
 mod hashsum;
+mod statfs_sys;
 pub mod hostname;
 mod httpc;
 pub mod iconv;
@@ -78,6 +81,7 @@ pub mod paste;
 pub mod patch;
 pub mod printenv;
 pub mod printf;
+pub mod ps;
 pub mod pwd;
 pub mod readelf;
 pub mod readlink;
@@ -273,6 +277,9 @@ pub const NAMES: &[&str] = &[
     "unix2dos",
     "iconv",
     "printenv",
+    "ps",
+    "free",
+    "df",
 ];
 
 /// Run an applet by name; `None` means "no such applet".
@@ -407,6 +414,9 @@ pub fn dispatch(name: &str, args: &[String]) -> Option<i32> {
         "unix2dos" => unix2dos::run(args),
         "iconv" => iconv::run(args),
         "printenv" => printenv::run(args),
+        "ps" => ps::run(args),
+        "free" => free::run(args),
+        "df" => df::run(args),
         _ => return None,
     })
 }
