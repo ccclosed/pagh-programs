@@ -1,13 +1,15 @@
-# Каталог: 120 программ + threads/dns/nc/dd
+# Каталог: 120 программ + 8 applet'ов сверх цели
 
-Цель — 120 applet'ов плюс `threads`-демо, `dns`-резолвер и `nc`/`dd` (сверх цели), запускаемых
+Цель — 120 applet'ов плюс `threads`-демо, `dns`-резолвер, `nc`/`dd` и
+текстовые `dos2unix`/`unix2dos`/`iconv`/`printenv` (сверх цели), запускаемых
 на pagh-riscv через `libpagh`/`paghbox`.
 Статус: `[x]` реализовано и собирается в составе `paghbox`, `[~]` в работе,
 `[ ]` запланировано. Ядро — POSIX-подобные CLI-утилиты; «портировать» =
 реализовать семантику под `libpagh` (не тащить GNU/Linux-исходники).
 
-> Статус: 120 целевых + `threads`, `dns`, `nc` и `dd`, все отмечены `[x]`;
-> собираются в `paghbox` 1.11.0 (124 команды).
+> Статус: 120 целевых + `threads`, `dns`, `nc`, `dd`, `dos2unix`, `unix2dos`,
+> `iconv` и `printenv`, все отмечены `[x]`; собираются в `paghbox` 1.12.0
+> (128 команд).
 > Батч 9 (6 утилит: sha3sum, calc, base85, readelf, uuidgen, paghfetch)
 > проверен живым запуском в QEMU на ядре 0.16.1: SHA3-256 сверен с
 > векторами FIPS 202, `-b`/`-c`/`--status` — по check-файлам; calc —
@@ -21,8 +23,12 @@
 > 0 FAIL (см. README и `docs/live-testing.md`). 1.11.0 добавил `dd` (блочное
 > копирование `if=/of=/bs=/count=/skip=/seek=/conv=notrunc`) и `nc` (TCP
 > клиент и одноразовый listener, relay через `poll`) — оба полностью
-> реализуемы на ABI 0.21.0. Список — 120 целевых имён + `threads` + `dns` +
-> `nc` + `dd`, все 124 входят в `commands=` пакета. `ps`/`free`/`pgrep`/`df`
+> реализуемы на ABI 0.21.0. 1.12.0 добавил `dos2unix`/`unix2dos` (CRLF↔LF на
+> месте), `iconv` (fail-closed subset UTF-8/ASCII/ISO-8859-1/UTF-16LE/BE) и
+> `printenv`; `head`/`tail`/`wc`/`grep` уже были в paghbox с 1.8.0 (дублей
+> нет), проверено по `NAMES` и манифесту пакета. Список — 120 целевых имён +
+> `threads` + `dns` + `nc` + `dd` + `dos2unix` + `unix2dos` + `iconv` +
+> `printenv`, все 128 входят в `commands=` пакета. `ps`/`free`/`pgrep`/`df`
 > по-прежнему не реализуемы: в ABI 0.21.0 нет `/proc`, `/proc/meminfo` и
 > `statfs`, поэтому перечисление процессов, объём памяти и блоки ФС неоткуда
 > взять (см. примечание внизу).
@@ -185,11 +191,20 @@
 - [x] dd — блочное копирование `if=/of=/bs=/count=/skip=/seek=/conv=notrunc/status=`;
   `bs` с суффиксами `c/w/b/k/K/M/G`, вывод — `N+M records in/out`; ошибки ABI
   (`conv=fsync` нет) отклоняются, а не игнорируются (сверх 120, ABI 0.21.0)
+- [x] dos2unix — CRLF→LF на месте; одинокий `\r` сохраняется; файл читается
+  целиком (in-place без streaming); `-` = stdin→stdout (сверх 120, ABI 0.21.0)
+- [x] unix2dos — LF→CRLF на месте; существующий CRLF не удваивается
+  (идемпотентно); общий код с dos2unix (сверх 120, ABI 0.21.0)
+- [x] iconv — UTF-8/ASCII/ISO-8859-1/UTF-16LE/UTF-16BE, `-f/-t/-o/-l` и один файл;
+  fail-closed: невалидный вход/непарный суррогат/непредставимый символ → 1,
+  неизвестный charset → 2 (сверх 120, ABI 0.21.0)
+- [x] printenv — envp как есть (`PWD=...`); `printenv NAME...` печатает значения,
+  отсутствующее имя → exit 1 (сверх 120, ABI 0.21.0)
 
-> Примечание: 120 целевых `[x]` + `threads` и `dns` реализованы в
-> `programs/src/applets/` и собираются в `paghbox` 1.11.0 (124 команды). Живая
-> проверка ведётся по ядру 0.21.x (`run /mnt/paghbox <applet> ...`), см. README
-> и `docs/live-testing.md`. Слот `dns` когда-то был отдан `sha512sum` (в ABI
+> Примечание: 120 целевых `[x]` + `threads`, `dns`, `nc`, `dd`, `dos2unix`,
+> `unix2dos`, `iconv` и `printenv` реализованы в `programs/src/applets/` и
+> собираются в `paghbox` 1.12.0 (128 команд). Живая проверка ведётся по ядру
+> 0.21.x (`run /mnt/paghbox <applet> ...`), см. README и `docs/live-testing.md`. Слот `dns` когда-то был отдан `sha512sum` (в ABI
 > 0.16.1 не было DNS); в 0.21.0 появился `libpagh::dns`, поэтому `dns` вернулся
 > отдельной командой, а не вместо `sha512sum`. Слоты
 > `pgrep`/`pkill`/`ping`/`netstat`/`lsblk`/`addr2line` заменены на

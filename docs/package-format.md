@@ -37,8 +37,9 @@ dispatches on `argv[0]`.
 
 The format itself does not cap the number of commands. The kernel installer's
 current limit is `MAX_COMMANDS = 160` (raised from 32 in 0.10.2), which covers the
-120-name target plus the `threads`, `dns`, `nc` and `dd` extras (124 commands in
-paghbox 1.11.0); a package above it would be downloaded and hash-checked, then
+120-name target plus `threads`, `dns`, `nc`, `dd`, `dos2unix`, `unix2dos`,
+`iconv` and `printenv` extras (128 commands in paghbox 1.12.0); a package above
+it would be downloaded and hash-checked, then
 refused with `pkg: install: package manifest is invalid`. That is an
 implementation limit, not a manifest error.
 
