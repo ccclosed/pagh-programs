@@ -36,17 +36,18 @@ maintainer actions.
 
 | Tag | Cut from | GitHub release type |
 |---|---|---|
-| `vX.Y.Z` (or bare `X.Y.Z`, the historical style here) | `main` | Release |
+| `vX.Y.Z` | `main` | Release |
 | `vX.Y.Z-rc.N` | `dev` (must not already be on `main`) | Pre-release |
 
-New tags always carry the `v` prefix (`vX.Y.Z`, `vX.Y.Z-rc.N`); old bare-numeric
-tags stay as history. The version source of truth is `programs/Cargo.toml` (the
-`paghbox` package version), mirrored by the applet count/version figures in
-`README.md`, `catalog.md` and `docs/package-format.md` that `tools/check_docs.py`
-enforces; `dev` carries the next release version, `main` the last released one.
-The release workflow checks both the tag's branch (stable: main; RC: dev-only)
-and that the tag base equals the version source. The operational checklist is in
-`RELEASING.md`.
+New tags must match `vX.Y.Z` or `vX.Y.Z-rc.N` exactly; the release workflow
+rejects bare `X.Y.Z`, `-pre.N` and any other spelling. Old bare-numeric tags
+stay as immutable history. The version source of truth is
+`programs/Cargo.toml` (the `paghbox` package version), mirrored by the applet
+count/version figures in `README.md`, `catalog.md` and
+`docs/package-format.md` that `tools/check_docs.py` enforces; `dev` carries the
+next release version, `main` the last released one. The release workflow checks
+both the tag's branch (stable: main; RC: dev-only) and that the tag base equals
+the version source. The operational checklist is in `RELEASING.md`.
 
 ## What is published where
 

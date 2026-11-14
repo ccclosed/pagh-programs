@@ -1,12 +1,14 @@
 name: release
 
-# Tag-driven GitHub releases. New tags always carry the `v` prefix:
+# Tag-driven GitHub releases. New tags must match the strict pattern
+# `vX.Y.Z` or `vX.Y.Z-rc.N`; anything else — bare `X.Y.Z`, `-pre.N`, trailing
+# junk — is rejected:
 #
 #   stable      vX.Y.Z       must be reachable from `main`  -> Release
 #   pre-release vX.Y.Z-rc.N  must be reachable from `dev` AND not from `main`
 #                            -> Pre-release (release-candidate lane only)
 #
-# Anything else (`-pre.N`, arbitrary suffixes) is refused. The base version
+# The base version
 # `X.Y.Z` must equal `programs/Cargo.toml`'s `[package].version` for paghbox
 # (see `VERSION_FILE`): the tag is not allowed to disagree with the applet
 # bundle the tree actually builds. Every release gets a source archive and a
@@ -17,13 +19,16 @@ name: release
 # The resulting `.ppkg` is published to pagh-repo, and only from a stable
 # release on `main` (see RELEASING.md).
 #
-# Old bare-numeric tags remain valid history (the workflow still accepts them on
-# push); only newly created tags must use the `v` prefix.
+# Old bare-numeric tags remain as history only and are never rewritten; the
+# trigger below still catches a bare tag so the strict check can reject it. New
+# tags must be `vX.Y.Z` or `vX.Y.Z-rc.N`, and a rejected tag creates no release.
 
 on:
   push:
     tags:
       - 'v*'
+      # Historical bare tags: kept so a mistaken new bare tag is explicitly
+      # rejected by the check below instead of being silently ignored.
       - '[0-9]*'
 
 permissions:
@@ -49,26 +54,19 @@ jobs:
           tag="${GITHUB_REF_NAME}"
           base="${tag#v}"
           base="${base%%-*}"
-          case "$tag" in
-            v[0-9]*.[0-9]*.[0-9]*) : ;;
-            *) echo "::error::new tags must be vX.Y.Z or vX.Y.Z-rc.N (got $tag)"; exit 1 ;;
-          esac
-          case "$tag" in
-            *-rc.[0-9]*)
-              git merge-base --is-ancestor "$GITHUB_SHA" origin/dev || {
-                echo "::error::pre-release $tag must be reachable from dev"; exit 1; }
-              if git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
-                echo "::error::pre-release $tag must not point at a commit already on main"; exit 1
-              fi
-              ;;
-            *-*)
-              echo "::error::only the -rc.N suffix is supported for pre-releases (got $tag)"; exit 1
-              ;;
-            *)
-              git merge-base --is-ancestor "$GITHUB_SHA" origin/main || {
-                echo "::error::stable release $tag must be reachable from main"; exit 1; }
-              ;;
-          esac
+          if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-rc\.[0-9]+)?$ ]]; then
+            echo "::error::new tags must match vX.Y.Z or vX.Y.Z-rc.N exactly (got $tag)"; exit 1
+          fi
+          if [[ "$tag" =~ -rc\.[0-9]+$ ]]; then
+            git merge-base --is-ancestor "$GITHUB_SHA" origin/dev || {
+              echo "::error::pre-release $tag must be reachable from dev"; exit 1; }
+            if git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+              echo "::error::pre-release $tag must not point at a commit already on main"; exit 1
+            fi
+          else
+            git merge-base --is-ancestor "$GITHUB_SHA" origin/main || {
+              echo "::error::stable release $tag must be reachable from main"; exit 1; }
+          fi
           if [ -f "$VERSION_FILE" ]; then
             version="$(sed -n 's/^version *= *"\([^"]*\)".*/\1/p' "$VERSION_FILE" | head -n1)"
           elif [ -f VERSION ]; then
