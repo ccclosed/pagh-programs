@@ -10,9 +10,16 @@ SHA-256/размер, ставит ELF в `/mnt/bin` и создаёт симл�
 ## Branching and releases
 
 `main` is the stable branch; `dev` is the experimental integration branch. Feature
-and fix PRs target `dev`; stable releases are tagged from `main`, release
-candidates/pre-releases from `dev` (`vX.Y.Z-rc.N`). The release workflow refuses a
-tag cut from the wrong branch. See [BRANCHING.md](BRANCHING.md).
+and fix PRs target `dev`; stable releases are tagged `vX.Y.Z` from `main`, and
+release candidates are tagged `vX.Y.Z-rc.N` from `dev` only (there is no `-pre.N`
+channel). The tag base must equal the `paghbox` version in
+[`programs/Cargo.toml`](programs/Cargo.toml); the release workflow refuses a tag
+cut from the wrong branch, a version mismatch, or any suffix other than `-rc.N`.
+Hotfixes go straight to `main` as a PATCH release (no RC) for a critical/high
+verified security finding or a release-blocking regression. Only a stable
+release's `.ppkg` is published to
+[`pagh-repo`](https://github.com/ccclosed/pagh-repo); pre-releases never are.
+See [BRANCHING.md](BRANCHING.md) and [RELEASING.md](RELEASING.md).
 
 ## Структура
 
