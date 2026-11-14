@@ -5,8 +5,9 @@
 | Branch | Role | Rules |
 |---|---|---|
 | `main` | **Stable.** What users build, package and release. | Only release merges from `dev` (or a hotfix PR) land here. CI must be green. |
-| `dev` | **Experimental integration.** Next release lives here and may be broken between commits. | Feature/fix PRs target `dev`. CI must be green before merge. |
+| `dev` | **Experimental integration.** The next release lives here and may be broken between commits. | Feature/fix PRs target `dev`. CI must be green before merge. |
 | `feat/*`, `fix/*`, `security/*` | Short-lived work branches. | Branch from `dev`, PR back to `dev`, delete after merge. |
+| `hotfix/*` | Emergency fix for a released version. | Branch from `main`, PR to `main`; only critical/high verified security or a release-blocking regression. |
 
 `main` and `dev` are both protected in spirit: no direct pushes of code, no
 force-pushes, CI green before merge. Tagging and release publication are
@@ -15,34 +16,45 @@ maintainer actions.
 ## Release flow
 
 1. **Feature / fix PR** → `dev`. CI runs the same gates as for `main`.
-2. **Pre-release** (optional but recommended): tag a validated `dev` commit
-   `vX.Y.Z-rc.N` (or `-pre.N` for an experimental snapshot) and push the tag.
+2. **Pre-release**: freeze `dev` and tag a validated `dev` commit
+   `vX.Y.Z-rc.N` (release candidates only; there is no `-pre.N` channel) and
+   push the tag. After `-rc.1` only stabilisation fixes land in `dev`.
    `.github/workflows/release.yml` publishes it as a **GitHub pre-release**
    (GitHub marks it "Pre-release"; package tooling must ignore it unless the
    user opts in).
 3. **Stabilisation**: once `dev` is release-ready, merge `dev` → `main` (merge
    commit or fast-forward, no code changes beyond release metadata).
 4. **Stable release**: tag the merge commit `vX.Y.Z` on `main`; the release
-   workflow publishes a full GitHub release with generated notes and (where the
-   repository builds one) the release artifact.
-5. **Hotfix**: branch from `main`, PR to `main`, tag a PATCH version; afterwards
-   merge `main` back into `dev` so the next release does not regress the fix.
+   workflow publishes a full GitHub release with generated notes and the source
+   archive (`<repo>-vX.Y.Z.tar.gz` with `.sha256`).
+5. **Hotfix**: branch from `main`, PR to `main` with full CI plus a targeted
+   regression test, tag a PATCH version **straight to stable** (no RC), then
+   merge `main` back into `dev` with `--no-ff`; `dev` keeps the higher version
+   and the next release's figures stay ahead.
 
 ## Tag conventions
 
 | Tag | Cut from | GitHub release type |
 |---|---|---|
-| `vX.Y.Z` (or bare `X.Y.Z` where historically used) | `main` | Release |
-| `vX.Y.Z-rc.N` | `dev` | Pre-release |
-| `vX.Y.Z-pre.N` | `dev` | Pre-release |
+| `vX.Y.Z` (or bare `X.Y.Z`, the historical style here) | `main` | Release |
+| `vX.Y.Z-rc.N` | `dev` (must not already be on `main`) | Pre-release |
 
-The version source of truth is `programs/Cargo.toml` (the `paghbox` package
-version), mirrored by the version figures in `README.md` and `catalog.md`; a tag
-must match it. The generated `repo/` directory (package and index for the
-pagh-repo mirror) is a build product of that version, not a separate source of
-truth, and is not committed here. The release workflow checks ancestry, not the
-version string — the version bump and the tag are made in the same release step
-by a maintainer.
+New tags always carry the `v` prefix (`vX.Y.Z`, `vX.Y.Z-rc.N`); old bare-numeric
+tags stay as history. The version source of truth is `programs/Cargo.toml` (the
+`paghbox` package version), mirrored by the applet count/version figures in
+`README.md`, `catalog.md` and `docs/package-format.md` that `tools/check_docs.py`
+enforces; `dev` carries the next release version, `main` the last released one.
+The release workflow checks both the tag's branch (stable: main; RC: dev-only)
+and that the tag base equals the version source. The operational checklist is in
+`RELEASING.md`.
+
+## What is published where
+
+A GitHub release of this repository carries the versioned **source archive**.
+The distributable, the `paghbox` `.ppkg`, is built from a **stable `main`-tagged
+release** and copied into [`pagh-repo`](https://github.com/ccclosed/pagh-repo)
+with `tools/build_repo.py` + its `tools/publish.py`. A build from `dev` or from
+an `-rc.N` tag is a pre-release and is **never** published there.
 
 ## Why two branches
 
